@@ -1,0 +1,1158 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: workforce
+    description: Workforce management operations
+  - name: storage
+    description: Employee profile photo storage
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [workforce]
+      summary: Get workforce dashboard summary
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+  /membership-requests:
+    get:
+      operationId: listMembershipRequests
+      tags: [workforce]
+      summary: List pending membership requests
+      responses:
+        "200":
+          description: Membership request list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MembershipRequest"
+  /membership-requests/{id}:
+    patch:
+      operationId: reviewMembershipRequest
+      tags: [workforce]
+      summary: Approve or reject a membership request
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MembershipReview"
+      responses:
+        "200":
+          description: Reviewed membership request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MembershipRequest"
+  /employees:
+    get:
+      operationId: listEmployees
+      tags: [workforce]
+      summary: List employees
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive, all]
+            default: active
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Employee list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Employee"
+    post:
+      operationId: createEmployee
+      tags: [workforce]
+      summary: Create an employee
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmployeeInput"
+      responses:
+        "201":
+          description: Created employee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+  /employees/{id}:
+    get:
+      operationId: getEmployee
+      tags: [workforce]
+      summary: Get an employee
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Employee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateEmployee
+      tags: [workforce]
+      summary: Update an employee
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmployeeUpdate"
+      responses:
+        "200":
+          description: Updated employee
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteEmployee
+      tags: [workforce]
+      summary: Archive an employee while preserving all history
+      description: Manager-only. Archives the employee; related history is retained.
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Employee archived
+        "403":
+          description: Manager access required
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /storage/photos/upload-url:
+    post:
+      operationId: requestEmployeePhotoUploadUrl
+      tags: [storage]
+      summary: Request a signed upload URL for an employee photo
+      description: Manager-only. Upload bytes directly to the returned URL with the requested Content-Type.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmployeePhotoUploadUrlInput"
+      responses:
+        "200":
+          description: Signed private object upload URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmployeePhotoUploadUrl"
+        "400":
+          description: Invalid image metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /storage/leave-attachments/upload-url:
+    post:
+      operationId: requestLeaveAttachmentUploadUrl
+      tags: [storage]
+      summary: Request a signed upload URL for a leave attachment
+      description: Available to authenticated users who can create leave requests. Upload bytes directly with the requested Content-Type.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeaveAttachmentUploadUrlInput"
+      responses:
+        "200":
+          description: Signed private object upload URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeaveAttachmentUploadUrl"
+        "400":
+          description: Invalid attachment metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /storage/photos/{employeeId}:
+    get:
+      operationId: getEmployeePhoto
+      tags: [storage]
+      summary: Serve the saved photo for one employee
+      description: Authenticated read-only endpoint; serves only the employee's linked private image.
+      parameters:
+        - name: employeeId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Employee profile photo
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/png:
+              schema: { type: string, format: binary }
+            image/webp:
+              schema: { type: string, format: binary }
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /employees/{id}/work-history/{from}/{to}:
+    get:
+      operationId: getEmployeeWorkHistory
+      tags: [workforce]
+      summary: Get an employee's planned and actual work history
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - name: from
+          in: path
+          required: true
+          schema: { type: string, format: date }
+        - name: to
+          in: path
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Employee work history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmployeeWorkHistory"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /employees/{id}/work-history/{date}:
+    put:
+      operationId: saveEmployeeWorkRecord
+      tags: [workforce]
+      summary: Create or update an employee's actual work record
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - name: date
+          in: path
+          required: true
+          schema: { type: string, format: date }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmployeeWorkRecordInput"
+      responses:
+        "200":
+          description: Saved work record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmployeeWorkRecord"
+  /daily-work-records/{date}:
+    get:
+      operationId: getDailyWorkRecords
+      tags: [workforce]
+      summary: List active employees and their work records for a day
+      parameters:
+        - name: date
+          in: path
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Daily work records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyWorkRecords"
+    put:
+      operationId: saveDailyWorkRecords
+      tags: [workforce]
+      summary: Create or update multiple employee work records for a day
+      parameters:
+        - name: date
+          in: path
+          required: true
+          schema: { type: string, format: date }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DailyWorkRecordsInput"
+      responses:
+        "200":
+          description: Saved daily work records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyWorkRecords"
+  /departments:
+    get:
+      operationId: listDepartments
+      tags: [workforce]
+      summary: List departments
+      responses:
+        "200":
+          description: Department list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Department"
+    post:
+      operationId: createDepartment
+      tags: [workforce]
+      summary: Create a department
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DepartmentInput"
+      responses:
+        "201":
+          description: Created department
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Department"
+  /departments/{id}:
+    patch:
+      operationId: renameDepartment
+      tags: [workforce]
+      summary: Rename a department and all references
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DepartmentInput"
+      responses:
+        "200":
+          description: Renamed department
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Department"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteDepartment
+      tags: [workforce]
+      summary: Delete an empty department
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Department deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /department-schedules:
+    get:
+      operationId: listDepartmentSchedules
+      tags: [workforce]
+      summary: List fixed department schedules
+      responses:
+        "200":
+          description: Department schedule list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DepartmentSchedule"
+    post:
+      operationId: saveDepartmentSchedule
+      tags: [workforce]
+      summary: Create or update a fixed department schedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DepartmentScheduleInput"
+      responses:
+        "200":
+          description: Saved department schedule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DepartmentSchedule"
+  /special-periods:
+    get:
+      operationId: listSpecialPeriods
+      tags: [workforce]
+      summary: List special work periods
+      responses:
+        "200":
+          description: Special period list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SpecialPeriod"
+    post:
+      operationId: createSpecialPeriod
+      tags: [workforce]
+      summary: Create a special work period
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SpecialPeriodInput"
+      responses:
+        "201":
+          description: Created special period
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpecialPeriod"
+  /special-periods/{id}:
+    delete:
+      operationId: deleteSpecialPeriod
+      tags: [workforce]
+      summary: Delete a special work period
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Special period deleted
+  /overtime:
+    get:
+      operationId: listOvertime
+      tags: [workforce]
+      summary: List scheduled overtime and employee hours
+      responses:
+        "200":
+          description: Overtime sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OvertimeSession"
+    post:
+      operationId: createOvertime
+      tags: [workforce]
+      summary: Schedule overtime for a department or selected employees
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OvertimeInput"
+      responses:
+        "201":
+          description: Created overtime
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OvertimeSession"
+  /overtime/{id}:
+    delete:
+      operationId: deleteOvertime
+      tags: [workforce]
+      summary: Delete an overtime session
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Deleted
+  /overtime/{id}/participants/{employeeId}:
+    patch:
+      operationId: saveOvertimeHours
+      tags: [workforce]
+      summary: Record an employee's completed overtime hours
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - name: employeeId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OvertimeHoursInput"
+      responses:
+        "200":
+          description: Updated overtime session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OvertimeSession"
+  /work-debts:
+    get:
+      operationId: listWorkDebts
+      tags: [workforce]
+      summary: List daily missed hours, weekly offsets, and outstanding work debt
+      responses:
+        "200":
+          description: Work debt report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkDebtReport"
+  /leaves:
+    get:
+      operationId: listLeaves
+      tags: [workforce]
+      summary: List leave records
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, approved, rejected, all]
+            default: all
+        - name: month
+          in: query
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}$'
+        - name: employeeId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Leave list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Leave"
+    post:
+      operationId: createLeave
+      tags: [workforce]
+      summary: Create a leave request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeaveInput"
+      responses:
+        "201":
+          description: Created leave request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Leave"
+  /leaves/{id}/status:
+    patch:
+      operationId: updateLeaveStatus
+      tags: [workforce]
+      summary: Approve or reject a leave request
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeaveStatusUpdate"
+      responses:
+        "200":
+          description: Updated leave request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Leave"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /leaves/{id}/attachments/{attachmentId}:
+    get:
+      operationId: downloadLeaveAttachment
+      tags: [workforce]
+      summary: Download an attachment belonging to a leave record
+      parameters:
+        - $ref: "#/components/parameters/Id"
+        - name: attachmentId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Private leave attachment
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+            X-Content-Type-Options:
+              schema: { type: string }
+            Cache-Control:
+              schema: { type: string }
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /activity:
+    get:
+      operationId: listActivity
+      tags: [workforce]
+      summary: List recent workforce activity
+      responses:
+        "200":
+          description: Recent activity
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Activity"
+components:
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    MembershipRequest:
+      type: object
+      required: [id, username, displayName, role, approvalStatus, createdAt]
+      properties:
+        id: { type: integer }
+        username: { type: string }
+        displayName: { type: string }
+        role: { type: string }
+        approvalStatus:
+          type: string
+          enum: [pending, approved, rejected]
+        createdAt: { type: string, format: date-time }
+    MembershipReview:
+      type: object
+      required: [approvalStatus]
+      properties:
+        approvalStatus:
+          type: string
+          enum: [approved, rejected]
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+    Employee:
+      type: object
+      required: [id, employeeNumber, name, department, role, weeklyHours, annualLeaveDays, annualLeaveDaysOverride, annualLeaveHours, usedLeaveHours, pendingAnnualLeaveHours, remainingAnnualLeaveHours, hireDate, usedLeaveDays, pendingAnnualLeaveDays, remainingAnnualLeaveDays, leaveCycleStart, leaveCycleEnd, status, avatarColor, photoPath]
+      properties:
+        id: { type: integer }
+        employeeNumber: { type: string }
+        name: { type: string }
+        department: { type: string }
+        role: { type: string }
+        weeklyHours: { type: number }
+        annualLeaveDays: { type: number }
+        annualLeaveDaysOverride: { type: [number, "null"] }
+        annualLeaveHours: { type: number }
+        usedLeaveHours: { type: number }
+        pendingAnnualLeaveHours: { type: number }
+        remainingAnnualLeaveHours: { type: [number, "null"] }
+        hireDate: { type: [string, "null"], format: date }
+        usedLeaveDays: { type: number }
+        pendingAnnualLeaveDays: { type: number }
+        remainingAnnualLeaveDays: { type: [number, "null"] }
+        leaveCycleStart: { type: [string, "null"], format: date }
+        leaveCycleEnd: { type: [string, "null"], format: date }
+        status:
+          type: string
+          enum: [active, inactive]
+        avatarColor: { type: string }
+        photoPath: { type: [string, "null"] }
+    EmployeeInput:
+      type: object
+      required: [employeeNumber, name, department, role, hireDate]
+      properties:
+        employeeNumber: { type: string, minLength: 1 }
+        name: { type: string, minLength: 1 }
+        department: { type: string, minLength: 1 }
+        role: { type: string, minLength: 1 }
+        hireDate: { type: string, format: date }
+        annualLeaveDaysOverride: { type: [number, "null"], minimum: 0, maximum: 100 }
+        photoPath: { type: [string, "null"] }
+    EmployeeUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        department: { type: string, minLength: 1 }
+        role: { type: string, minLength: 1 }
+        hireDate: { type: string, format: date }
+        annualLeaveDaysOverride: { type: [number, "null"], minimum: 0, maximum: 100 }
+        status:
+          type: string
+          enum: [active, inactive]
+        photoPath: { type: [string, "null"] }
+    EmployeePhotoUploadUrlInput:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name: { type: string, minLength: 1 }
+        size: { type: integer, minimum: 1, maximum: 5242880 }
+        contentType: { type: string, enum: [image/jpeg, image/png, image/webp] }
+    EmployeePhotoUploadUrl:
+      type: object
+      required: [uploadURL, objectPath]
+      properties:
+        uploadURL: { type: string, format: uri }
+        objectPath: { type: string, pattern: '^/objects/uploads/[0-9a-fA-F-]{36}$' }
+    LeaveAttachmentUploadUrlInput:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 255 }
+        size: { type: integer, minimum: 1, maximum: 10485760 }
+        contentType:
+          type: string
+          enum: [image/jpeg, image/png, image/webp, application/pdf, application/msword, application/vnd.openxmlformats-officedocument.wordprocessingml.document]
+    LeaveAttachmentUploadUrl:
+      type: object
+      required: [uploadURL, objectPath]
+      properties:
+        uploadURL: { type: string, format: uri }
+        objectPath: { type: string, pattern: '^/objects/leave-attachments/[0-9a-fA-F-]{36}$' }
+    Department:
+      type: object
+      required: [id, name, employeeCount, annualLeaveDays]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        employeeCount: { type: integer }
+        annualLeaveDays: { type: number }
+    DepartmentInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        annualLeaveDays: { type: number, minimum: 0, maximum: 100 }
+    ScheduleDay:
+      type: object
+      required: [weekday, dayName, hours, plannedStart, plannedEnd]
+      properties:
+        weekday: { type: integer, minimum: 1, maximum: 7 }
+        dayName: { type: string }
+        hours: { type: number, minimum: 0, maximum: 24 }
+        plannedStart: { type: [string, "null"], pattern: '^\d{2}:\d{2}$' }
+        plannedEnd: { type: [string, "null"], pattern: '^\d{2}:\d{2}$' }
+    DepartmentSchedule:
+      type: object
+      required: [id, department, days, totalHours]
+      properties:
+        id: { type: integer }
+        department: { type: string }
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScheduleDay"
+        totalHours: { type: number }
+    DepartmentScheduleInput:
+      type: object
+      required: [department, days]
+      properties:
+        department: { type: string, minLength: 1 }
+        days:
+          type: array
+          minItems: 7
+          maxItems: 7
+          items:
+            $ref: "#/components/schemas/ScheduleDay"
+    SpecialPeriod:
+      type: object
+      required: [id, department, name, startDate, endDate, days, totalHours]
+      properties:
+        id: { type: integer }
+        department: { type: string }
+        name: { type: string }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScheduleDay"
+        totalHours: { type: number }
+    SpecialPeriodInput:
+      type: object
+      required: [department, name, startDate, endDate, days]
+      properties:
+        department: { type: string, minLength: 1 }
+        name: { type: string, minLength: 1 }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        days:
+          type: array
+          minItems: 7
+          maxItems: 7
+          items:
+            $ref: "#/components/schemas/ScheduleDay"
+    EmployeeWorkRecord:
+      type: object
+      required: [date, dayName, plannedHours, plannedStart, plannedEnd, actualHours, checkIn, checkOut, status, note]
+      properties:
+        date: { type: string, format: date }
+        dayName: { type: string }
+        plannedHours: { type: number }
+        plannedStart: { type: [string, "null"] }
+        plannedEnd: { type: [string, "null"] }
+        actualHours: { type: [number, "null"] }
+        checkIn: { type: [string, "null"] }
+        checkOut: { type: [string, "null"] }
+        status:
+          type: string
+          enum: [work, leave, rest]
+        note: { type: string }
+    EmployeeWorkRecordInput:
+      type: object
+      required: [actualHours, checkIn, checkOut, note]
+      properties:
+        actualHours: { type: [number, "null"], minimum: 0, maximum: 24 }
+        checkIn: { type: [string, "null"], pattern: '^\d{2}:\d{2}$' }
+        checkOut: { type: [string, "null"], pattern: '^\d{2}:\d{2}$' }
+        note: { type: string, maxLength: 500 }
+    EmployeeWorkHistory:
+      type: object
+      required: [employee, from, to, totalPlannedHours, totalActualHours, records]
+      properties:
+        employee:
+          $ref: "#/components/schemas/Employee"
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        totalPlannedHours: { type: number }
+        totalActualHours: { type: number }
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/EmployeeWorkRecord"
+    DailyEmployeeWorkRecord:
+      allOf:
+        - $ref: "#/components/schemas/EmployeeWorkRecord"
+        - type: object
+          required: [employeeId, employeeNumber, employeeName, department, avatarColor, photoPath, plannedStart, plannedEnd, late, earlyLeave, hoursDifference, remainingAnnualLeave]
+          properties:
+            employeeId: { type: integer }
+            employeeNumber: { type: string }
+            employeeName: { type: string }
+            department: { type: string }
+            avatarColor: { type: string }
+            photoPath: { type: [string, "null"] }
+            plannedStart: { type: [string, "null"] }
+            plannedEnd: { type: [string, "null"] }
+            late: { type: boolean }
+            earlyLeave: { type: boolean }
+            hoursDifference: { type: [number, "null"] }
+            remainingAnnualLeave: { type: [number, "null"] }
+    DailyWorkRecords:
+      type: object
+      required: [date, dayName, records]
+      properties:
+        date: { type: string, format: date }
+        dayName: { type: string }
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/DailyEmployeeWorkRecord"
+    DailyEmployeeWorkRecordInput:
+      allOf:
+        - $ref: "#/components/schemas/EmployeeWorkRecordInput"
+        - type: object
+          required: [employeeId]
+          properties:
+            employeeId: { type: integer }
+    DailyWorkRecordsInput:
+      type: object
+      required: [records]
+      properties:
+        records:
+          type: array
+          maxItems: 1000
+          items:
+            $ref: "#/components/schemas/DailyEmployeeWorkRecordInput"
+    OvertimeParticipant:
+      type: object
+      required: [employeeId, employeeName, employeeNumber, actualHours]
+      properties:
+        employeeId: { type: integer }
+        employeeName: { type: string }
+        employeeNumber: { type: string }
+        actualHours: { type: [number, "null"] }
+    OvertimeSession:
+      type: object
+      required: [id, workDate, scope, department, departments, plannedStart, plannedEnd, plannedHours, note, createdByName, createdAt, participants]
+      properties:
+        id: { type: integer }
+        workDate: { type: string, format: date }
+        scope: { type: string, enum: [department, individual, combined] }
+        department: { type: [string, "null"] }
+        departments:
+          type: array
+          items: { type: string }
+        plannedStart: { type: string }
+        plannedEnd: { type: string }
+        plannedHours: { type: number }
+        note: { type: string }
+        createdByName: { type: string }
+        createdAt: { type: string, format: date-time }
+        participants:
+          type: array
+          items:
+            $ref: "#/components/schemas/OvertimeParticipant"
+    OvertimeInput:
+      type: object
+      required: [workDate, scope, plannedStart, plannedEnd]
+      properties:
+        workDate: { type: string, format: date }
+        scope: { type: string, enum: [department, individual, combined] }
+        department: { type: string }
+        departments:
+          type: array
+          items: { type: string }
+        employeeIds:
+          type: array
+          items: { type: integer }
+        plannedStart: { type: string, pattern: '^\d{2}:\d{2}$' }
+        plannedEnd: { type: string, pattern: '^\d{2}:\d{2}$' }
+        note: { type: string, maxLength: 500 }
+    OvertimeHoursInput:
+      type: object
+      required: [actualHours]
+      properties:
+        actualHours: { type: [number, "null"], minimum: 0, maximum: 24 }
+    WorkDebtDay:
+      type: object
+      required: [employeeId, employeeName, department, photoPath, workDate, weekStart, source, leaveStatus, plannedHours, actualHours, plannedStart, plannedEnd, checkIn, checkOut, missingHours, coveredByRegularHours, coveredByOvertimeHours, outstandingHours]
+      properties:
+        employeeId: { type: integer }
+        employeeName: { type: string }
+        department: { type: string }
+        photoPath: { type: [string, "null"] }
+        workDate: { type: string, format: date }
+        weekStart: { type: string, format: date }
+        source: { type: string, enum: [attendance, debt_leave] }
+        leaveStatus: { type: [string, "null"], enum: [pending, approved, null] }
+        plannedHours: { type: number }
+        actualHours: { type: number }
+        plannedStart: { type: [string, "null"] }
+        plannedEnd: { type: [string, "null"] }
+        checkIn: { type: [string, "null"] }
+        checkOut: { type: [string, "null"] }
+        missingHours: { type: number }
+        coveredByRegularHours: { type: number }
+        coveredByOvertimeHours: { type: number }
+        outstandingHours: { type: number }
+    WorkDebtReport:
+      type: object
+      required: [totalMissingHours, totalCoveredByRegularHours, totalCoveredByOvertimeHours, totalOutstandingHours, days, employeeSummaries]
+      properties:
+        totalMissingHours: { type: number }
+        totalCoveredByRegularHours: { type: number }
+        totalCoveredByOvertimeHours: { type: number }
+        totalOutstandingHours: { type: number }
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkDebtDay"
+        employeeSummaries:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkDebtEmployeeSummary"
+    WorkDebtEmployeeSummary:
+      type: object
+      required: [employeeId, totalCompletedOvertimeHours, totalDebtHours, outstandingDebtHours]
+      properties:
+        employeeId: { type: integer }
+        totalCompletedOvertimeHours: { type: number }
+        totalDebtHours: { type: number }
+        outstandingDebtHours: { type: number }
+    Leave:
+      type: object
+      required: [id, employeeId, employeeName, type, settlementType, startDate, endDate, days, deductedAnnualHours, annualHourBreakdown, annualCycleBalances, status, note, reviewedByName, reviewedAt, attachments]
+      properties:
+        id: { type: integer }
+        employeeId: { type: integer }
+        employeeName: { type: string }
+        type:
+          type: string
+          enum: [annual, sick, unpaid, other]
+        settlementType: { type: string, enum: [full, debt] }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        days: { type: number }
+        deductedAnnualHours: { type: number }
+        annualHourBreakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnnualHourEntry"
+        annualCycleBalances:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnnualCycleBalance"
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+        note: { type: string }
+        reviewedByName: { type: [string, "null"] }
+        reviewedAt: { type: [string, "null"], format: date-time }
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/LeaveAttachment"
+    AnnualHourEntry:
+      type: object
+      required: [date, hours]
+      properties:
+        date: { type: string, format: date }
+        hours: { type: number }
+    AnnualCycleBalance:
+      type: object
+      required: [startDate, endDate, entitlementHours, usedHours, pendingHours, remainingHours]
+      properties:
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        entitlementHours: { type: number }
+        usedHours: { type: number }
+        pendingHours: { type: number }
+        remainingHours: { type: number }
+    LeaveAttachment:
+      type: object
+      required: [id, name, size, contentType]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        size: { type: integer }
+        contentType: { type: string }
+    LeaveAttachmentInput:
+      type: object
+      required: [objectPath, name, size, contentType]
+      properties:
+        objectPath: { type: string, pattern: '^/objects/leave-attachments/[0-9a-fA-F-]{36}$' }
+        name: { type: string, minLength: 1, maxLength: 255 }
+        size: { type: integer, minimum: 1, maximum: 10485760 }
+        contentType:
+          type: string
+          enum: [image/jpeg, image/png, image/webp, application/pdf, application/msword, application/vnd.openxmlformats-officedocument.wordprocessingml.document]
+    LeaveInput:
+      type: object
+      required: [employeeId, type, startDate, endDate, note]
+      properties:
+        employeeId: { type: integer }
+        type:
+          type: string
+          enum: [annual, sick, unpaid, other]
+        settlementType: { type: string, enum: [full, debt], default: full }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        note: { type: string, minLength: 1, maxLength: 1000 }
+        attachments:
+          type: array
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/LeaveAttachmentInput"
+    LeaveStatusUpdate:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [approved, rejected, pending]
+    Activity:
+      type: object
+      required: [id, type, title, description, createdAt]
+      properties:
+        id: { type: integer }
+        type:
+          type: string
+          enum: [leave, plan, employee]
+        title: { type: string }
+        description: { type: string }
+        createdAt: { type: string, format: date-time }
+        tone:
+          type: string
+          enum: [blue, green, amber, red]
+    DashboardSummary:
+      type: object
+      required: [weekStart, activeEmployees, plannedHours, targetHours, approvedLeaveDays, pendingLeaveRequests, employeesOnLeave, deficitHours, departmentBreakdown]
+      properties:
+        weekStart: { type: string, format: date }
+        activeEmployees: { type: integer }
+        plannedHours: { type: number }
+        targetHours: { type: number }
+        approvedLeaveDays: { type: number }
+        pendingLeaveRequests: { type: integer }
+        employeesOnLeave: { type: integer }
+        deficitHours: { type: number }
+        departmentBreakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/DepartmentSummary"
+    DepartmentSummary:
+      type: object
+      required: [department, employeeCount, plannedHours, targetHours]
+      properties:
+        department: { type: string }
+        employeeCount: { type: integer }
+        plannedHours: { type: number }
+        targetHours: { type: number }
+

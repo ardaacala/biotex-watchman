@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Vardiya ve İzin Yönetimi"
+description = "Fabrika çalışanlarının haftalık çalışma planlarını, 5 güne dağıtılmış saatlerini, izinlerini ve eksik-fazla çalışmalarını yöneten operasyon uygulaması."
+version = "1.0.0"
+id = "artifacts/vardiya-yonetimi"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24730
+
+[services.development]
+run = "pnpm --filter @workspace/vardiya-yonetimi run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/vardiya-yonetimi", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/vardiya-yonetimi/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24730"
+BASE_PATH = "/"

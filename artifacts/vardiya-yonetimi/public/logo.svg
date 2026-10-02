@@ -1,0 +1,6 @@
+<svg width="220" height="48" viewBox="0 0 220 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <ellipse cx="24" cy="24" rx="22" ry="16" fill="#174B8A" stroke="#C4D82E" stroke-width="3"/>
+  <path d="M11 35V20L19 24V17L27 21V12H32V35H11Z" stroke="white" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M17 30H19M24 30H26M31 30H33" stroke="#C4D82E" stroke-width="2.5" stroke-linecap="round"/>
+  <text x="55" y="30" fill="#4F46E5" font-family="Arial, sans-serif" font-size="18" font-weight="700">BiotexWatchman</text>
+</svg>
