@@ -3,6 +3,7 @@ import { promisify } from "node:util";
 import { and, eq, gt } from "drizzle-orm";
 import { db, adminSessionsTable, adminUsersTable } from "@workspace/db";
 import type { NextFunction, Request, Response } from "express";
+export { requireManager, requireWorkforceEditor } from "./authorization";
 
 const scrypt = promisify(scryptCallback);
 export const SESSION_COOKIE = "vardiya_session";
@@ -84,18 +85,10 @@ export async function getSessionUser(req: Request) {
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const user = await getSessionUser(req);
   if (!user) {
-    res.status(401).json({ error: "Bu alan yalnızca yetkili yöneticilere açıktır." });
+    res.status(401).json({ error: "Bu alan yalnızca onaylı yönetici ve İK kullanıcılarına açıktır." });
     return;
   }
   res.locals.user = user;
-  next();
-}
-
-export function requireManager(_req: Request, res: Response, next: NextFunction): void {
-  if (res.locals.user?.role !== "manager") {
-    res.status(403).json({ error: "Bu işlem yalnızca yöneticiler tarafından yapılabilir." });
-    return;
-  }
   next();
 }
 

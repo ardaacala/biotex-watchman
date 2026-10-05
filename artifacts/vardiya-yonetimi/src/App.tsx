@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Loader2, LockKeyhole, UserRound } from "lucide-react";
 import { Redirect, Route, Router as WouterRouter, Switch, useLocation } from "wouter";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { UpdateBanner } from "@/components/update-banner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Toaster } from "@/components/ui/toaster";
@@ -16,6 +17,7 @@ import DailyWorkRecordsPage from "@/pages/daily-work-records";
 import SchedulePage from "@/pages/schedule";
 import LeavesPage from "@/pages/leaves";
 import MembershipRequestsPage from "@/pages/membership-requests";
+import AdminPage from "@/pages/admin";
 import OvertimePage from "@/pages/overtime";
 import WorkDebtsPage from "@/pages/work-debts";
 import NotFound from "@/pages/not-found";
@@ -139,6 +141,7 @@ function Router() {
     <Route path="/work-debts">{() => <ProtectedPage><WorkDebtsPage /></ProtectedPage>}</Route>
     <Route path="/leaves">{() => <ProtectedPage><LeavesPage /></ProtectedPage>}</Route>
     <Route path="/membership-requests">{() => <ProtectedPage managerOnly><MembershipRequestsPage /></ProtectedPage>}</Route>
+    <Route path="/admin">{() => <ProtectedPage managerOnly><AdminPage /></ProtectedPage>}</Route>
     <Route component={NotFound} />
   </Switch>;
 }
@@ -149,6 +152,7 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <TooltipProvider>
+            <UpdateBanner />
             <ErrorBoundary><Router /></ErrorBoundary>
             <Toaster />
           </TooltipProvider>

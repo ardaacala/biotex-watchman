@@ -8,7 +8,7 @@ import {
   CreateOvertimeBody, CreateOvertimeResponse, DeleteOvertimeParams, ListOvertimeResponse,
   ListWorkDebtsResponse, SaveOvertimeHoursBody, SaveOvertimeHoursParams, SaveOvertimeHoursResponse,
 } from "@workspace/api-zod";
-import { requireManager } from "../lib/auth";
+import { requireWorkforceEditor } from "../lib/auth";
 
 const router: IRouter = Router();
 
@@ -64,7 +64,7 @@ router.get("/overtime", async (_req, res): Promise<void> => {
   res.json(ListOvertimeResponse.parse(await sessions()));
 });
 
-router.post("/overtime", requireManager, async (req, res): Promise<void> => {
+router.post("/overtime", requireWorkforceEditor, async (req, res): Promise<void> => {
   const parsed = CreateOvertimeBody.safeParse(req.body);
   if (!parsed.success || !validDate(req.body?.workDate)) {
     res.status(400).json({ error: "Geçersiz ek mesai bilgisi" });
@@ -172,7 +172,7 @@ router.post("/overtime", requireManager, async (req, res): Promise<void> => {
   res.status(201).json(CreateOvertimeResponse.parse(created));
 });
 
-router.patch("/overtime/:id/participants/:employeeId", requireManager, async (req, res): Promise<void> => {
+router.patch("/overtime/:id/participants/:employeeId", requireWorkforceEditor, async (req, res): Promise<void> => {
   const params = SaveOvertimeHoursParams.safeParse(req.params);
   const body = SaveOvertimeHoursBody.safeParse(req.body);
   if (!params.success || !body.success || (body.data.actualHours !== null && !Number.isFinite(body.data.actualHours))) {
@@ -206,7 +206,7 @@ router.patch("/overtime/:id/participants/:employeeId", requireManager, async (re
   res.json(SaveOvertimeHoursResponse.parse(current));
 });
 
-router.delete("/overtime/:id", requireManager, async (req, res): Promise<void> => {
+router.delete("/overtime/:id", requireWorkforceEditor, async (req, res): Promise<void> => {
   const params = DeleteOvertimeParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: "Geçersiz ek mesai" });

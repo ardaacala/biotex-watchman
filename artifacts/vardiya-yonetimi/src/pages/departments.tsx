@@ -23,6 +23,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Search, Plus, Edit2, Trash2, Building2, AlertTriangle, Users } from "lucide-react"
+import { hasOperationalAccess, useAuth } from "@/lib/auth"
 
 const departmentSchema = z.object({
   name: z.string().min(2, "Departman adı en az 2 karakter olmalıdır").max(100, "Departman adı en fazla 100 karakter olabilir"),
@@ -32,6 +33,9 @@ const departmentSchema = z.object({
 type DepartmentFormValues = z.infer<typeof departmentSchema>
 
 export default function DepartmentsPage() {
+  const { user } = useAuth()
+  const canManageOperations = hasOperationalAccess(user?.role)
+  const canCreateDepartments = user?.role === "manager"
   const [searchTerm, setSearchTerm] = useState("")
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [editDepartment, setEditDepartment] = useState<Department | null>(null)
@@ -70,6 +74,7 @@ export default function DepartmentsPage() {
   }
 
   const onSubmitCreate = (data: DepartmentFormValues) => {
+    if (!canCreateDepartments) return
     createMutation.mutate({ data: { name: data.name, annualLeaveDays: data.annualLeaveDays } }, {
       onSuccess: () => {
         invalidateRelated()
@@ -84,7 +89,7 @@ export default function DepartmentsPage() {
   }
 
   const onSubmitEdit = (data: DepartmentFormValues) => {
-    if (!editDepartment) return
+    if (!canManageOperations || !editDepartment) return
     renameMutation.mutate({ 
       id: editDepartment.id, 
         data: { name: data.name, annualLeaveDays: data.annualLeaveDays }
@@ -101,7 +106,7 @@ export default function DepartmentsPage() {
   }
   
   const onConfirmDelete = () => {
-    if (!deleteDepartment) return
+    if (!canManageOperations || !deleteDepartment) return
     deleteMutation.mutate({ id: deleteDepartment.id }, {
       onSuccess: () => {
         invalidateRelated()
@@ -127,7 +132,7 @@ export default function DepartmentsPage() {
             <p className="text-muted-foreground mt-1">{departments.length} kayıtlı departman</p>
           </div>
           
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          {canCreateDepartments && <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
               <Button className="gap-2"><Plus className="h-4 w-4" /> Yeni Departman</Button>
             </DialogTrigger>
@@ -158,7 +163,7 @@ export default function DepartmentsPage() {
                 </form>
               </Form>
             </DialogContent>
-          </Dialog>
+          </Dialog>}
         </div>
 
         <div className="flex-1 flex flex-col bg-card rounded-xl border shadow-sm overflow-hidden">
@@ -210,17 +215,19 @@ export default function DepartmentsPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-end gap-2">
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => openEdit(dept)}>
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                            onClick={() => setDeleteDepartment(dept)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {canManageOperations && <>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => openEdit(dept)}>
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                              onClick={() => setDeleteDepartment(dept)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </>}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -231,7 +238,7 @@ export default function DepartmentsPage() {
           </div>
         </div>
 
-        <Dialog open={!!editDepartment} onOpenChange={(open) => !open && setEditDepartment(null)}>
+        {canManageOperations && <Dialog open={!!editDepartment} onOpenChange={(open) => !open && setEditDepartment(null)}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Departman Düzenle</DialogTitle>
@@ -260,9 +267,9 @@ export default function DepartmentsPage() {
               </form>
             </Form>
           </DialogContent>
-        </Dialog>
+        </Dialog>}
 
-        <Dialog open={!!deleteDepartment} onOpenChange={(open) => !open && setDeleteDepartment(null)}>
+        {canManageOperations && <Dialog open={!!deleteDepartment} onOpenChange={(open) => !open && setDeleteDepartment(null)}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle className="text-destructive flex items-center gap-2">
@@ -298,7 +305,7 @@ export default function DepartmentsPage() {
               </Button>
             </DialogFooter>
           </DialogContent>
-        </Dialog>
+        </Dialog>}
       </div>
     </Layout>
   )

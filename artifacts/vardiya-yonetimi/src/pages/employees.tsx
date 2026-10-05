@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { Fragment, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Layout } from "@/components/layout"
 import { Button } from "@/components/ui/button"
@@ -16,10 +16,10 @@ import { useListEmployees, useListDepartments, useCreateEmployee, useUpdateEmplo
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { Search, Plus, Edit2, ShieldAlert, CalendarClock, Trash2 } from "lucide-react"
+import { Search, Plus, Edit2, ShieldAlert, CalendarClock, Trash2, ChevronDown } from "lucide-react"
 import { useLocation, Link } from "wouter"
 import { useToast } from "@/hooks/use-toast"
-import { useAuth } from "@/lib/auth"
+import { hasOperationalAccess, useAuth } from "@/lib/auth"
 
 const getIstanbulToday = () => {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -57,7 +57,17 @@ type EmployeeFormValues = z.output<typeof employeeSchema>
 export default function EmployeesPage() {
   const [, setLocation] = useLocation()
   const { user } = useAuth()
+  const canManageEmployees = hasOperationalAccess(user?.role)
   const [searchTerm, setSearchTerm] = useState("")
+  const [expandedEmployees, setExpandedEmployees] = useState<Set<number>>(() => new Set())
+  const toggleEmployeeDetails = (id: number) => {
+    setExpandedEmployees((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
   const [sortBy, setSortBy] = useState<"alphabetical" | "department" | "status">("alphabetical")
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [createHireDateMode, setCreateHireDateMode] = useState<"today" | "past">("today")
@@ -149,6 +159,7 @@ export default function EmployeesPage() {
   }
 
   const onSubmitCreate = async (data: EmployeeFormValues) => {
+    if (!canManageEmployees) return
     try {
       setSavingPhoto(true)
       const photoPath = createPhoto ? await uploadEmployeePhoto(createPhoto) : undefined
@@ -184,7 +195,7 @@ export default function EmployeesPage() {
   }
 
   const onSubmitEdit = async (data: EmployeeFormValues) => {
-    if (!editEmployee) return
+    if (!canManageEmployees || !editEmployee) return
     try {
       setSavingPhoto(true)
       const photoPath = editPhoto ? await uploadEmployeePhoto(editPhoto) : editPhotoRemoved ? null : undefined
@@ -211,6 +222,7 @@ export default function EmployeesPage() {
   }
 
   const toggleStatus = (employee: Employee) => {
+    if (!canManageEmployees) return
     updateMutation.mutate({
       id: employee.id,
       data: { status: employee.status === "active" ? "inactive" : "active" },
@@ -224,7 +236,7 @@ export default function EmployeesPage() {
   }
 
   const removeEmployee = () => {
-    if (!deletingEmployee || user?.role !== "manager") return
+    if (!deletingEmployee || !canManageEmployees) return
     deleteMutation.mutate({ id: deletingEmployee.id }, {
       onSuccess: () => {
         invalidateRelatedViews()
@@ -260,7 +272,7 @@ export default function EmployeesPage() {
             <p className="text-muted-foreground mt-1">{employees.length} kayıtlı personel</p>
           </div>
 
-          <Dialog open={isCreateOpen} onOpenChange={(open) => {
+          {canManageEmployees && <Dialog open={isCreateOpen} onOpenChange={(open) => {
             if (!open && (savingPhoto || createMutation.isPending)) return
             setIsCreateOpen(open)
             if (open) {
@@ -303,7 +315,8 @@ export default function EmployeesPage() {
                         {departments.length === 0 ? (
                           <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 flex flex-col gap-2">
                             <p>Kayıtlı departman yok.</p>
-                            <Link href="/departments" className="font-bold underline text-amber-900">Departman oluşturun</Link>
+                            {user?.role === "manager" && <Link href="/departments" className="font-bold underline text-amber-900">Departman oluşturun</Link>}
+                            {user?.role !== "manager" && <p>Departman oluşturması için bir yöneticiye başvurun.</p>}
                           </div>
                         ) : (
                           <Select onValueChange={field.onChange} value={field.value}>
@@ -385,7 +398,7 @@ export default function EmployeesPage() {
                 </form>
               </Form>
             </DialogContent>
-          </Dialog>
+          </Dialog>}
         </div>
 
         <div className="flex-1 flex flex-col bg-card rounded-xl border shadow-sm overflow-hidden">
@@ -415,26 +428,25 @@ export default function EmployeesPage() {
             <Table>
               <TableHeader className="sticky top-0 bg-muted/95 backdrop-blur z-10">
                 <TableRow>
-                  <TableHead className="w-[80px]">Sicil</TableHead>
+                  <TableHead className="w-[80px] px-2 sm:px-4">Sicil</TableHead>
                   <TableHead>Personel</TableHead>
-                  <TableHead>Departman &amp; Görev</TableHead>
-                  <TableHead className="text-right">Yıllık İzin</TableHead>
-                  <TableHead>Durum</TableHead>
-                  <TableHead className="w-[140px]"></TableHead>
+                  <TableHead className="w-[80px] px-2 sm:px-4">Durum</TableHead>
+                  <TableHead className="w-[52px] px-2"><span className="sr-only">Detaylar</span></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
-                  <TableRow><TableCell colSpan={6} className="text-center py-8">Yükleniyor...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={4} className="text-center py-8">Yükleniyor...</TableCell></TableRow>
                 ) : filteredEmployees.length === 0 ? (
-                  <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Kayıt bulunamadı</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Kayıt bulunamadı</TableCell></TableRow>
                 ) : (
                   filteredEmployees.map((employee) => (
-                    <TableRow key={employee.id} className={employee.status === "inactive" ? "opacity-50" : ""}>
-                      <TableCell className="font-mono text-xs font-medium text-muted-foreground">{employee.employeeNumber}</TableCell>
-                      <TableCell>
+                    <Fragment key={employee.id}>
+                    <TableRow className={employee.status === "inactive" ? "opacity-50" : ""} data-testid={`row-employee-${employee.id}`}>
+                      <TableCell className="px-2 sm:px-4 font-mono text-xs font-medium text-muted-foreground">{employee.employeeNumber}</TableCell>
+                      <TableCell className="px-2 sm:px-4">
                         <div className="flex items-center gap-3">
-                          <Avatar className="h-8 w-8" style={{ backgroundColor: employee.avatarColor }}>
+                           <Avatar className="h-8 w-8 shrink-0" style={{ backgroundColor: employee.avatarColor }}>
                             <AvatarImage src={employeePhotoUrl(employee.id, employee.photoPath)} className="object-cover" alt={`${employee.name} fotoğrafı`} />
                             <AvatarFallback className="bg-transparent text-white font-medium">
                               {employee.name.split(" ").map((name) => name[0]).join("").substring(0, 2)}
@@ -442,21 +454,50 @@ export default function EmployeesPage() {
                           </Avatar>
                           <div className="flex flex-col">
                             <span className="font-medium text-foreground">{employee.name}</span>
-                            <span className={`text-xs ${employee.hireDate ? "text-muted-foreground" : "font-medium text-amber-700"}`}>
-                              {employee.hireDate ? `İşe giriş: ${employee.hireDate.slice(0, 10)}` : "İşe giriş tarihi eksik"}
-                            </span>
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="px-2 sm:px-4">
+                        <Badge variant={employee.status === "active" ? "success" : "secondary"}>
+                          {employee.status === "active" ? "Aktif" : "Pasif"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="px-2 text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9 shrink-0"
+                          onClick={() => toggleEmployeeDetails(employee.id)}
+                          aria-expanded={expandedEmployees.has(employee.id)}
+                          aria-controls={`employee-details-${employee.id}`}
+                          aria-label={`${employee.name} detaylarını ${expandedEmployees.has(employee.id) ? "kapat" : "aç"}`}
+                          data-testid={`button-toggle-employee-${employee.id}`}
+                        >
+                          <ChevronDown aria-hidden="true" className={`h-5 w-5 transition-transform motion-reduce:transition-none ${expandedEmployees.has(employee.id) ? "rotate-180" : ""}`} />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                    <TableRow id={`employee-details-${employee.id}`} hidden={!expandedEmployees.has(employee.id)} className="bg-muted/25 hover:bg-muted/25" data-testid={`details-employee-${employee.id}`}>
+                      <TableCell colSpan={4} className="p-4 sm:p-5">
+                        {expandedEmployees.has(employee.id) && <>
+                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        <div>
+                          <p className="mb-1 text-xs font-medium text-muted-foreground">Departman &amp; Görev</p>
                         <div className="flex flex-col">
                           <span className="text-sm font-medium">{employee.department}</span>
                           <span className="text-xs text-muted-foreground">{employee.role}</span>
                         </div>
-                      </TableCell>
-                      <TableCell className="text-right">
+                        </div>
+                        <div>
+                          <p className="mb-1 text-xs font-medium text-muted-foreground">İşe Giriş</p>
+                          <p className={`text-sm ${employee.hireDate ? "" : "font-medium text-amber-700"}`}>
+                            {employee.hireDate ? employee.hireDate.slice(0, 10) : "İşe giriş tarihi eksik"}
+                          </p>
+                        </div>
+                        <div>
+                        <p className="mb-1 text-xs font-medium text-muted-foreground">Yıllık İzin</p>
                         {employee.hireDate ? (
-                          <div className="flex flex-col items-end" data-testid={`text-employee-annual-balance-${employee.id}`}>
+                          <div className="flex flex-col gap-1" data-testid={`text-employee-annual-balance-${employee.id}`}>
                             {employee.remainingAnnualLeaveHours === null ? (
                               <span className="text-sm font-medium text-muted-foreground">Bakiye hesaplanamıyor</span>
                             ) : (
@@ -475,30 +516,25 @@ export default function EmployeesPage() {
                         ) : (
                           <span className="text-xs font-medium text-amber-700">İşe giriş tarihi eksik</span>
                         )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={employee.status === "active" ? "success" : "secondary"} className="capitalize">
-                          {employee.status === "active" ? "Aktif" : "Pasif"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-end gap-2">
+                        </div>
+                        </div>
+                        <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t pt-3">
                           <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => setLocation(`/employees/${employee.id}/history`)} title="Çalışma Geçmişi">
                             <CalendarClock className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(employee)} title="Personeli düzenle">
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                            onClick={() => toggleStatus(employee)}
-                            title={employee.status === "active" ? "Pasife Al" : "Aktifleştir"}
-                          >
-                            <ShieldAlert className="h-4 w-4" />
-                          </Button>
-                          {user?.role === "manager" && (
+                          {canManageEmployees && <>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(employee)} title="Personeli düzenle">
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                              onClick={() => toggleStatus(employee)}
+                              title={employee.status === "active" ? "Pasife Al" : "Aktifleştir"}
+                            >
+                              <ShieldAlert className="h-4 w-4" />
+                            </Button>
                             <Button
                               variant="ghost"
                               size="icon"
@@ -510,10 +546,12 @@ export default function EmployeesPage() {
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
-                          )}
+                          </>}
                         </div>
+                        </>}
                       </TableCell>
                     </TableRow>
+                    </Fragment>
                   ))
                 )}
               </TableBody>
@@ -521,7 +559,7 @@ export default function EmployeesPage() {
           </div>
         </div>
 
-        <Dialog open={!!editEmployee} onOpenChange={(open) => !open && !savingPhoto && !updateMutation.isPending && setEditEmployee(null)}>
+        {canManageEmployees && <Dialog open={!!editEmployee} onOpenChange={(open) => !open && !savingPhoto && !updateMutation.isPending && setEditEmployee(null)}>
           <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Personel Düzenle: {editEmployee?.name}</DialogTitle>
@@ -545,9 +583,10 @@ export default function EmployeesPage() {
                   <FormItem>
                     <FormLabel>Departman</FormLabel>
                     {departments.length === 0 ? (
-                      <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 flex flex-col gap-2">
-                        <p>Kayıtlı departman yok.</p>
-                        <Link href="/departments" className="font-bold underline text-amber-900">Departman oluşturun</Link>
+                        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 flex flex-col gap-2">
+                          <p>Kayıtlı departman yok.</p>
+                          {user?.role === "manager" && <Link href="/departments" className="font-bold underline text-amber-900">Departman oluşturun</Link>}
+                          {user?.role !== "manager" && <p>Departman oluşturması için bir yöneticiye başvurun.</p>}
                       </div>
                     ) : (
                       <Select onValueChange={field.onChange} value={field.value}>
@@ -607,8 +646,8 @@ export default function EmployeesPage() {
               </form>
             </Form>
           </DialogContent>
-        </Dialog>
-        <AlertDialog open={!!deletingEmployee} onOpenChange={(open) => { if (!open && !deleteMutation.isPending) setDeletingEmployee(null) }}>
+        </Dialog>}
+        {canManageEmployees && <AlertDialog open={!!deletingEmployee} onOpenChange={(open) => { if (!open && !deleteMutation.isPending) setDeletingEmployee(null) }}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Personel listeden kaldırılsın mı?</AlertDialogTitle>
@@ -629,7 +668,7 @@ export default function EmployeesPage() {
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
-        </AlertDialog>
+        </AlertDialog>}
       </div>
     </Layout>
   )

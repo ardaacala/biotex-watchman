@@ -1,4 +1,5 @@
 import {
+  boolean,
   date,
   doublePrecision,
   integer,
@@ -190,6 +191,9 @@ export const leavesTable = pgTable("leaves", {
   annualHourSnapshot: jsonb("annual_hour_snapshot").$type<LeaveHourSnapshotEntry[] | null>(),
   status: text("status").notNull().default("pending"),
   note: text("note").notNull().default(""),
+  isLateEntry: boolean("is_late_entry").notNull().default(false),
+  recordedAt: timestamp("recorded_at", { withTimezone: true }),
+  recordedByName: text("recorded_by_name"),
   reviewedByUserId: integer("reviewed_by_user_id"),
   reviewedByName: text("reviewed_by_name"),
   reviewedAt: timestamp("reviewed_at", { withTimezone: true }),

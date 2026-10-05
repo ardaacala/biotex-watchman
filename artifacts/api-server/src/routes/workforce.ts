@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { hasBookedOverlap, retrospectiveDateError } from "../lib/retrospective-leave";
 import {
   and,
   asc,
@@ -72,7 +73,7 @@ import {
   UpdateLeaveStatusParams,
   UpdateLeaveStatusResponse,
 } from "@workspace/api-zod";
-import { requireManager } from "../lib/auth";
+import { requireManager, requireWorkforceEditor } from "../lib/auth";
 import { deleteEmployeePhoto, validateEmployeePhoto } from "../lib/employeePhotoStorage";
 import {
   getLeaveAttachmentFile,
@@ -380,7 +381,7 @@ router.get("/employees", async (req, res): Promise<void> => {
   res.json(ListEmployeesResponse.parse(await withAnnualBalances(employees)));
 });
 
-router.post("/employees", requireManager, async (req, res): Promise<void> => {
+router.post("/employees", requireWorkforceEditor, async (req, res): Promise<void> => {
   const parsed = CreateEmployeeBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -440,7 +441,7 @@ router.get("/employees/:id", async (req, res): Promise<void> => {
   res.json(GetEmployeeResponse.parse((await withAnnualBalances([employee]))[0]));
 });
 
-router.patch("/employees/:id", requireManager, async (req, res): Promise<void> => {
+router.patch("/employees/:id", requireWorkforceEditor, async (req, res): Promise<void> => {
   const params = UpdateEmployeeParams.safeParse(req.params);
   const body = UpdateEmployeeBody.safeParse(req.body);
   if (!params.success || !body.success || (req.body?.hireDate !== undefined
@@ -512,7 +513,7 @@ router.patch("/employees/:id", requireManager, async (req, res): Promise<void> =
   res.json(UpdateEmployeeResponse.parse((await withAnnualBalances([result.employee]))[0]));
 });
 
-router.delete("/employees/:id", requireManager, async (req, res): Promise<void> => {
+router.delete("/employees/:id", requireWorkforceEditor, async (req, res): Promise<void> => {
   const params = GetEmployeeParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -608,7 +609,7 @@ router.get("/employees/:id/work-history/:from/:to", async (req, res): Promise<vo
   }));
 });
 
-router.put("/employees/:id/work-history/:date", requireManager, async (req, res): Promise<void> => {
+router.put("/employees/:id/work-history/:date", requireWorkforceEditor, async (req, res): Promise<void> => {
   const params = SaveEmployeeWorkRecordParams.safeParse({
     ...req.params,
     date: parseIsoDateParam(req.params.date),
@@ -725,7 +726,7 @@ router.get("/daily-work-records/:date", async (req, res): Promise<void> => {
   res.json(GetDailyWorkRecordsResponse.parse(await dailyWorkRecords(date)));
 });
 
-router.put("/daily-work-records/:date", requireManager, async (req, res): Promise<void> => {
+router.put("/daily-work-records/:date", requireWorkforceEditor, async (req, res): Promise<void> => {
   const params = SaveDailyWorkRecordsParams.safeParse({
     ...req.params,
     date: parseIsoDateParam(req.params.date),
@@ -884,7 +885,7 @@ router.post("/departments", requireManager, async (req, res): Promise<void> => {
   res.status(201).json(CreateDepartmentResponse.parse({ ...department, employeeCount: 0 }));
 });
 
-router.patch("/departments/:id", requireManager, async (req, res): Promise<void> => {
+router.patch("/departments/:id", requireWorkforceEditor, async (req, res): Promise<void> => {
   const params = RenameDepartmentParams.safeParse(req.params);
   const body = RenameDepartmentBody.safeParse(req.body);
   if (!params.success || !body.success) {
@@ -940,7 +941,7 @@ router.patch("/departments/:id", requireManager, async (req, res): Promise<void>
   res.json(RenameDepartmentResponse.parse({ ...updated, employeeCount: Number(count.value) }));
 });
 
-router.delete("/departments/:id", requireManager, async (req, res): Promise<void> => {
+router.delete("/departments/:id", requireWorkforceEditor, async (req, res): Promise<void> => {
   const params = DeleteDepartmentParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: "Geçersiz departman." });
@@ -976,7 +977,7 @@ router.get("/department-schedules", async (_req, res): Promise<void> => {
   res.json(ListDepartmentSchedulesResponse.parse(schedules.map(scheduleView)));
 });
 
-router.post("/department-schedules", requireManager, async (req, res): Promise<void> => {
+router.post("/department-schedules", requireWorkforceEditor, async (req, res): Promise<void> => {
   const parsed = SaveDepartmentScheduleBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -1009,7 +1010,7 @@ router.get("/special-periods", async (_req, res): Promise<void> => {
   res.json(ListSpecialPeriodsResponse.parse(periods.map(scheduleView)));
 });
 
-router.post("/special-periods", requireManager, async (req, res): Promise<void> => {
+router.post("/special-periods", requireWorkforceEditor, async (req, res): Promise<void> => {
   const parsed = CreateSpecialPeriodBody.safeParse(req.body);
   if (!parsed.success || isoDate(parsed.data.startDate) > isoDate(parsed.data.endDate)) {
     res.status(400).json({ error: "Geçersiz özel dönem bilgisi" });
@@ -1038,7 +1039,7 @@ router.post("/special-periods", requireManager, async (req, res): Promise<void> 
   res.status(201).json(CreateSpecialPeriodResponse.parse(scheduleView(period)));
 });
 
-router.delete("/special-periods/:id", requireManager, async (req, res): Promise<void> => {
+router.delete("/special-periods/:id", requireWorkforceEditor, async (req, res): Promise<void> => {
   const params = DeleteSpecialPeriodParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: "Geçersiz özel dönem" });
@@ -1104,6 +1105,7 @@ router.get("/leaves", async (req, res): Promise<void> => {
   }
   res.json(ListLeavesResponse.parse(rows.map(({ leave, employee }) => ({
     ...leave,
+    recordedAt: leave.recordedAt?.toISOString() ?? null,
     employeeName: employee.name,
     deductedAnnualHours: deductedAnnualHours(leave),
     annualHourBreakdown: annualHourEntries(leave),
@@ -1122,7 +1124,7 @@ router.get("/leaves", async (req, res): Promise<void> => {
   }))));
 });
 
-router.post("/leaves", async (req, res): Promise<void> => {
+router.post("/leaves", requireWorkforceEditor, async (req, res): Promise<void> => {
   const parsed = CreateLeaveBody.safeParse(req.body);
   const from = parseIsoDateParam(req.body?.startDate);
   const to = parseIsoDateParam(req.body?.endDate);
@@ -1169,11 +1171,31 @@ router.post("/leaves", async (req, res): Promise<void> => {
   }
   const startDate = isoDate(parsed.data.startDate);
   const endDate = isoDate(parsed.data.endDate);
+  const today = todayInIstanbul();
+  const retrospective = parsed.data.isRetrospective;
+  const retrospectiveError = retrospective ? retrospectiveDateError(startDate, endDate, today) : null;
+  if (retrospectiveError) {
+    res.status(400).json({ error: retrospectiveError });
+    return;
+  }
+  const recordedAt = new Date();
   const result = await db.transaction(async (tx) => {
     const [employee] = await tx.select().from(employeesTable)
       .where(eq(employeesTable.id, parsed.data.employeeId)).for("update");
     if (!employee) return { error: "Çalışan bulunamadı", status: 404 } as const;
     if (employee.deletedAt !== null) return { error: "Arşivlenmiş çalışan için yeni izin oluşturulamaz", status: 404 } as const;
+    if (retrospective) {
+      if (!employee.hireDate) {
+        return { error: "Geçmiş izin eklemeden önce personelin işe giriş tarihini kaydedin.", status: 400 } as const;
+      }
+      if (startDate < employee.hireDate) {
+        return { error: "Geçmiş izin işe giriş tarihinden önce başlayamaz.", status: 400 } as const;
+      }
+      const booked = await tx.select().from(leavesTable).where(eq(leavesTable.employeeId, employee.id));
+      if (hasBookedOverlap(booked, startDate, endDate)) {
+        return { error: "Bu personelin seçilen tarihlerde bekleyen veya onaylanmış izni var. Aynı izin yeniden eklenemez.", status: 400 } as const;
+      }
+    }
     const [schedule] = await tx.select().from(departmentSchedulesTable)
       .where(eq(departmentSchedulesTable.department, employee.department));
     const periods = await tx.select().from(specialPeriodsTable).where(and(
@@ -1200,11 +1222,23 @@ router.post("/leaves", async (req, res): Promise<void> => {
       startDate,
       endDate,
       note,
+      isLateEntry: startDate < today,
+      recordedAt,
+      recordedByName: res.locals.user.displayName,
+      status: retrospective ? "approved" : "pending",
+      reviewedByUserId: retrospective ? res.locals.user.id : null,
+      reviewedByName: retrospective ? res.locals.user.displayName : null,
+      reviewedAt: retrospective ? recordedAt : null,
       days: annualFull
         ? snapshot.reduce((sum, item) => sum + item.hours, 0) / HOURS_PER_ENTITLEMENT_DAY
         : leaveDays(startDate, endDate),
       annualHourSnapshot: snapshot,
     }).returning();
+    if (retrospective && annualFull) {
+      await tx.update(employeesTable).set({
+        usedLeaveDays: sql`${employeesTable.usedLeaveDays} + ${deductedAnnualHours(leave) / HOURS_PER_ENTITLEMENT_DAY}`,
+      }).where(eq(employeesTable.id, employee.id));
+    }
     const savedAttachments = attachments.length
       ? await tx.insert(leaveAttachmentsTable).values(attachments.map((attachment) => ({
         leaveId: leave.id,
@@ -1216,9 +1250,11 @@ router.post("/leaves", async (req, res): Promise<void> => {
       : [];
     await tx.insert(activitiesTable).values({
       type: "leave",
-      title: "Yeni izin talebi",
-      description: `${employee.name} için ${leave.days} günlük izin talebi oluşturuldu.`,
-      tone: "amber",
+      title: retrospective ? "Geçmiş izin sonradan eklendi" : "Yeni izin talebi",
+      description: retrospective
+        ? `${employee.name} için ${startDate} – ${endDate} tarihli ${leave.days} günlük kullanılmış izin ${res.locals.user.displayName} tarafından sonradan eklendi.`
+        : `${employee.name} için ${leave.days} günlük izin talebi oluşturuldu.`,
+      tone: retrospective ? "green" : "amber",
     });
     const annualBookings = annualFull
       ? await tx.select().from(leavesTable).where(eq(leavesTable.employeeId, employee.id))
@@ -1238,16 +1274,17 @@ router.post("/leaves", async (req, res): Promise<void> => {
   }
   res.status(201).json(CreateLeaveResponse.parse({
     ...result.leave,
+    recordedAt: result.leave.recordedAt?.toISOString() ?? null,
     employeeName: result.employeeName,
     deductedAnnualHours: deductedAnnualHours(result.leave),
     annualHourBreakdown: annualHourEntries(result.leave),
     annualCycleBalances: result.annualCycleBalances,
-    reviewedAt: null,
+    reviewedAt: result.leave.reviewedAt?.toISOString() ?? null,
     attachments: result.attachments.map(({ id, name, size, contentType }) => ({ id, name, size, contentType })),
   }));
 });
 
-router.patch("/leaves/:id/status", requireManager, async (req, res): Promise<void> => {
+router.patch("/leaves/:id/status", requireWorkforceEditor, async (req, res): Promise<void> => {
   const params = UpdateLeaveStatusParams.safeParse(req.params);
   const body = UpdateLeaveStatusBody.safeParse(req.body);
   if (!params.success || !body.success) {
@@ -1345,6 +1382,7 @@ router.patch("/leaves/:id/status", requireManager, async (req, res): Promise<voi
   }
   res.json(UpdateLeaveStatusResponse.parse({
     ...result.leave,
+    recordedAt: result.leave.recordedAt?.toISOString() ?? null,
     employeeName: result.employeeName,
     deductedAnnualHours: deductedAnnualHours(result.leave),
     annualHourBreakdown: annualHourEntries(result.leave),

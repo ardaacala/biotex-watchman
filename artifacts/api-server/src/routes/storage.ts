@@ -8,7 +8,7 @@ import {
   RequestEmployeePhotoUploadUrlResponse,
 } from "@workspace/api-zod";
 import { db, employeesTable } from "@workspace/db";
-import { requireManager } from "../lib/auth";
+import { requireWorkforceEditor } from "../lib/auth";
 import {
   createEmployeePhotoUpload,
   employeePhotoContentTypes,
@@ -19,7 +19,7 @@ import { createLeaveAttachmentUpload } from "../lib/leaveAttachmentStorage";
 
 const router: IRouter = Router();
 
-router.post("/storage/leave-attachments/upload-url", async (req, res): Promise<void> => {
+router.post("/storage/leave-attachments/upload-url", requireWorkforceEditor, async (req, res): Promise<void> => {
   const parsed = RequestLeaveAttachmentUploadUrlBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -38,7 +38,7 @@ router.post("/storage/leave-attachments/upload-url", async (req, res): Promise<v
   }
 });
 
-router.post("/storage/photos/upload-url", requireManager, async (req, res): Promise<void> => {
+router.post("/storage/photos/upload-url", requireWorkforceEditor, async (req, res): Promise<void> => {
   const parsed = RequestEmployeePhotoUploadUrlBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });

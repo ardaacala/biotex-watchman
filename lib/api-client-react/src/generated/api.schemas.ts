@@ -23,6 +23,26 @@ export interface MembershipRequest {
   createdAt: string;
 }
 
+export type UserRoleInputRole = typeof UserRoleInputRole[keyof typeof UserRoleInputRole];
+
+
+export const UserRoleInputRole = {
+  manager: 'manager',
+  hr: 'hr',
+} as const;
+
+export interface UserRoleInput {
+  role: UserRoleInputRole;
+}
+
+export interface UserPasswordInput {
+  /**
+     * @minLength 8
+     * @maxLength 128
+     */
+  password: string;
+}
+
 export type MembershipReviewApprovalStatus = typeof MembershipReviewApprovalStatus[keyof typeof MembershipReviewApprovalStatus];
 
 
@@ -553,6 +573,11 @@ export interface Leave {
   annualCycleBalances: AnnualCycleBalance[];
   status: LeaveStatus;
   note: string;
+  isLateEntry: boolean;
+  /** @nullable */
+  recordedAt: string | null;
+  /** @nullable */
+  recordedByName: string | null;
   /** @nullable */
   reviewedByName: string | null;
   /** @nullable */
@@ -608,6 +633,8 @@ export const LeaveInputSettlementType = {
 
 export interface LeaveInput {
   employeeId: number;
+  /** Record leave already taken earlier in the current Istanbul calendar year as approved. */
+  isRetrospective?: boolean;
   type: LeaveInputType;
   settlementType?: LeaveInputSettlementType;
   startDate: string;
@@ -641,6 +668,7 @@ export const ActivityType = {
   leave: 'leave',
   plan: 'plan',
   employee: 'employee',
+  department: 'department',
 } as const;
 
 export type ActivityTone = typeof ActivityTone[keyof typeof ActivityTone];

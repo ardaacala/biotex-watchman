@@ -11,6 +11,8 @@ import type { LeaveInputType } from './leaveInputType';
 
 export interface LeaveInput {
   employeeId: number;
+  /** Record leave already taken earlier in the current Istanbul calendar year as approved. */
+  isRetrospective?: boolean;
   type: LeaveInputType;
   settlementType?: LeaveInputSettlementType;
   startDate: Date;

@@ -26,6 +26,11 @@ export interface Leave {
   annualCycleBalances: AnnualCycleBalance[];
   status: LeaveStatus;
   note: string;
+  isLateEntry: boolean;
+  /** @nullable */
+  recordedAt: Date | null;
+  /** @nullable */
+  recordedByName: string | null;
   /** @nullable */
   reviewedByName: string | null;
   /** @nullable */

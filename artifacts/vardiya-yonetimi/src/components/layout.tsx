@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { Link, useLocation } from "wouter"
-import { Factory, Users, Calendar, Clock, LogOut, CalendarCheck2, Building2, UserCheck, CalendarClock, ClipboardList, ChevronLeft } from "lucide-react"
+import { Factory, Users, Calendar, Clock, LogOut, CalendarCheck2, Building2, ShieldCheck, CalendarClock, ClipboardList, ChevronLeft } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/auth"
 import biotexLogo from "@/assets/biotex-logo.png"
@@ -22,7 +22,7 @@ export function Sidebar({ onLogoutRequest }: { onLogoutRequest?: () => void }) {
     { href: "/dashboard", label: "Kontrol Paneli", icon: Factory },
     { href: "/departments", label: "Departmanlar", icon: Building2 },
     { href: "/employees", label: "Personel Yönetimi", icon: Users },
-    ...(user?.role === "manager" ? [{ href: "/membership-requests", label: "Üyelik Onayları", icon: UserCheck }] : []),
+    ...(user?.role === "manager" ? [{ href: "/admin", label: "Yönetici Paneli", icon: ShieldCheck }] : []),
     { href: "/daily-work-records", label: "Devam Takibi", icon: CalendarCheck2 },
     { href: "/schedule", label: "Vardiya Planı", icon: Calendar },
     { href: "/overtime", label: "Fazla Mesai", icon: CalendarClock },

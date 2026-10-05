@@ -39,6 +39,79 @@ export const GetDashboardSummaryResponse = zod.object({
 
 
 /**
+ * @summary List all member accounts for managers only
+ */
+export const ListManagedUsersResponseItem = zod.object({
+  "id": zod.number().int(),
+  "username": zod.string(),
+  "displayName": zod.string(),
+  "role": zod.string(),
+  "approvalStatus": zod.enum(['pending', 'approved', 'rejected']),
+  "createdAt": zod.coerce.date()
+})
+export const ListManagedUsersResponse = zod.array(ListManagedUsersResponseItem)
+
+
+/**
+ * @summary Change a member role and revoke their sessions
+ */
+
+
+
+export const UpdateManagedUserRoleParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const UpdateManagedUserRoleBody = zod.object({
+  "role": zod.enum(['manager', 'hr'])
+})
+
+export const UpdateManagedUserRoleResponse = zod.object({
+  "id": zod.number().int(),
+  "username": zod.string(),
+  "displayName": zod.string(),
+  "role": zod.string(),
+  "approvalStatus": zod.enum(['pending', 'approved', 'rejected']),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Replace a member password and revoke their sessions
+ */
+
+
+
+export const ResetManagedUserPasswordParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const resetManagedUserPasswordBodyPasswordMin = 8;
+export const resetManagedUserPasswordBodyPasswordMax = 128;
+
+
+
+export const ResetManagedUserPasswordBody = zod.object({
+  "password": zod.string().min(resetManagedUserPasswordBodyPasswordMin).max(resetManagedUserPasswordBodyPasswordMax)
+})
+
+export const ResetManagedUserPasswordResponse = zod.void()
+
+
+/**
+ * @summary Delete only a member login account without deleting workforce history
+ */
+
+
+
+export const DeleteManagedUserParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const DeleteManagedUserResponse = zod.void()
+
+
+/**
  * @summary List pending membership requests
  */
 export const ListMembershipRequestsResponseItem = zod.object({
@@ -239,7 +312,7 @@ export const UpdateEmployeeResponse = zod.object({
 
 
 /**
- * Manager-only. Archives the employee; related history is retained.
+ * Approved managers and HR users can archive the employee; related history is retained.
  * @summary Archive an employee while preserving all history
  */
 export const DeleteEmployeeParams = zod.object({
@@ -250,7 +323,7 @@ export const DeleteEmployeeResponse = zod.void()
 
 
 /**
- * Manager-only. Upload bytes directly to the returned URL with the requested Content-Type.
+ * Available to approved managers and HR users. Upload bytes directly to the returned URL with the requested Content-Type.
  * @summary Request a signed upload URL for an employee photo
  */
 
@@ -931,6 +1004,9 @@ export const ListLeavesResponseItem = zod.object({
 })),
   "status": zod.enum(['pending', 'approved', 'rejected']),
   "note": zod.string(),
+  "isLateEntry": zod.boolean(),
+  "recordedAt": zod.coerce.date().nullable(),
+  "recordedByName": zod.string().nullable(),
   "reviewedByName": zod.string().nullable(),
   "reviewedAt": zod.coerce.date().nullable(),
   "attachments": zod.array(zod.object({
@@ -946,6 +1022,7 @@ export const ListLeavesResponse = zod.array(ListLeavesResponseItem)
 /**
  * @summary Create a leave request
  */
+export const createLeaveBodyIsRetrospectiveDefault = false;
 export const createLeaveBodySettlementTypeDefault = `full`;
 export const createLeaveBodyNoteMax = 1000;
 
@@ -960,6 +1037,7 @@ export const createLeaveBodyAttachmentsMax = 5;
 
 export const CreateLeaveBody = zod.object({
   "employeeId": zod.number().int(),
+  "isRetrospective": zod.boolean().default(createLeaveBodyIsRetrospectiveDefault).describe('Record leave already taken earlier in the current Istanbul calendar year as approved.'),
   "type": zod.enum(['annual', 'sick', 'unpaid', 'other']),
   "settlementType": zod.enum(['full', 'debt']).default(createLeaveBodySettlementTypeDefault),
   "startDate": zod.coerce.date(),
@@ -997,6 +1075,9 @@ export const CreateLeaveResponse = zod.object({
 })),
   "status": zod.enum(['pending', 'approved', 'rejected']),
   "note": zod.string(),
+  "isLateEntry": zod.boolean(),
+  "recordedAt": zod.coerce.date().nullable(),
+  "recordedByName": zod.string().nullable(),
   "reviewedByName": zod.string().nullable(),
   "reviewedAt": zod.coerce.date().nullable(),
   "attachments": zod.array(zod.object({
@@ -1043,6 +1124,9 @@ export const UpdateLeaveStatusResponse = zod.object({
 })),
   "status": zod.enum(['pending', 'approved', 'rejected']),
   "note": zod.string(),
+  "isLateEntry": zod.boolean(),
+  "recordedAt": zod.coerce.date().nullable(),
+  "recordedByName": zod.string().nullable(),
   "reviewedByName": zod.string().nullable(),
   "reviewedAt": zod.coerce.date().nullable(),
   "attachments": zod.array(zod.object({
@@ -1070,7 +1154,7 @@ export const DownloadLeaveAttachmentResponse = zod.unknown()
  */
 export const ListActivityResponseItem = zod.object({
   "id": zod.number().int(),
-  "type": zod.enum(['leave', 'plan', 'employee']),
+  "type": zod.enum(['leave', 'plan', 'employee', 'department']),
   "title": zod.string(),
   "description": zod.string(),
   "createdAt": zod.coerce.date(),

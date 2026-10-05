@@ -1,4 +1,5 @@
 import path from 'path';
+import { randomUUID } from 'node:crypto';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
@@ -27,9 +28,32 @@ if (!basePath) {
   );
 }
 
+// Both the bundle and manifest use the same ID for each build/server start.
+const appVersion = randomUUID();
+const versionManifest = JSON.stringify({ version: appVersion });
+
 export default defineConfig({
   base: basePath,
+  define: { __APP_VERSION__: JSON.stringify(appVersion) },
   plugins: [
+    {
+      name: 'app-version',
+      generateBundle() {
+        this.emitFile({ type: 'asset', fileName: 'version.json', source: versionManifest });
+      },
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          const pathname = req.url?.split('?')[0];
+          if (pathname !== '/version.json' && pathname !== `${basePath.replace(/\/$/, '')}/version.json`) {
+            next();
+            return;
+          }
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('Cache-Control', 'no-store');
+          res.end(versionManifest);
+        });
+      },
+    },
     react(),
     tailwindcss({ optimize: false }),
     runtimeErrorOverlay(),

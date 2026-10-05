@@ -16,9 +16,10 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Search, Plus, CheckCircle, XCircle, ChevronsUpDown, Check, Paperclip, X } from "lucide-react"
-import { useAuth } from "@/lib/auth"
+import { hasOperationalAccess, useAuth } from "@/lib/auth"
 import { useToast } from "@/hooks/use-toast"
 import { LeaveHistory } from "@/components/leave-history"
+import { LeaveEntryBadge } from "@/components/leave-entry-badge"
 import { LeaveCalendar } from "@/components/leave-calendar"
 import { LeaveOverlap } from "@/components/leave-overlap"
 import { overlapSummary, todayInIstanbul } from "@/lib/leave-occupancy"
@@ -61,6 +62,7 @@ async function uploadLeaveAttachment(file: File) {
 }
 
 const leaveSchema = z.object({
+  isRetrospective: z.boolean(),
   employeeId: z.coerce.number().min(1, "Personel seçimi gerekli"),
   type: z.enum(['annual', 'sick', 'unpaid', 'other']),
   settlementType: z.enum(['full', 'debt']),
@@ -68,6 +70,16 @@ const leaveSchema = z.object({
   endDate: z.string().min(1, "Bitiş tarihi gerekli"),
   note: z.string().trim().min(1, "Açıklama gerekli").max(1000, "Açıklama en fazla 1000 karakter olabilir."),
 }).refine(value => value.startDate <= value.endDate, { path: ["endDate"], message: "Bitiş tarihi başlangıçtan önce olamaz." })
+  .superRefine((value, ctx) => {
+    if (!value.isRetrospective) return
+    const today = todayInIstanbul()
+    if (value.startDate.slice(0, 4) !== today.slice(0, 4) || value.endDate.slice(0, 4) !== today.slice(0, 4)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["startDate"], message: "Geçmiş izin yalnızca bu takvim yılı içinde olabilir." })
+    }
+    if (value.endDate >= today) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["endDate"], message: "Kullanılmış iznin bitişi bugünden önce olmalıdır." })
+    }
+  })
 
 type LeaveFormValues = z.infer<typeof leaveSchema>
 
@@ -86,7 +98,7 @@ export default function LeavesPage() {
   const [reviewAcknowledgedSignature, setReviewAcknowledgedSignature] = useState("")
   const { user } = useAuth()
   const { toast } = useToast()
-  const isManager = user?.role === "manager"
+  const canManageOperations = hasOperationalAccess(user?.role)
   
   const queryClient = useQueryClient()
   const { data: leaves, isLoading: leavesLoading, isFetching: leavesFetching, isError: leavesError, refetch: refetchLeaves } = useListLeaves()
@@ -94,7 +106,7 @@ export default function LeavesPage() {
   const reviewStillPending = !!reviewSnapshot && !!leaves?.some(leave => leave.id === reviewSnapshot.id && leave.status === "pending")
   const { data: employees = [], isLoading: employeesLoading } = useListEmployees({ status: 'active' })
   const { data: workDebtReport, isLoading: workDebtsLoading, isError: workDebtsError, refetch: refetchWorkDebts } = useListWorkDebts({
-    query: { enabled: isManager, queryKey: getListWorkDebtsQueryKey() },
+    query: { enabled: canManageOperations, queryKey: getListWorkDebtsQueryKey() },
   })
   
   const createMutation = useCreateLeave()
@@ -103,6 +115,7 @@ export default function LeavesPage() {
   const form = useForm<LeaveFormValues>({
     resolver: zodResolver(leaveSchema),
     defaultValues: {
+      isRetrospective: false,
       employeeId: undefined,
       type: 'annual',
       settlementType: 'full',
@@ -114,6 +127,11 @@ export default function LeavesPage() {
   const selectedEmployee = employees.find((employee) => employee.id === form.watch("employeeId"))
   const startDate = form.watch("startDate")
   const endDate = form.watch("endDate")
+  const retrospective = form.watch("isRetrospective")
+  const today = todayInIstanbul()
+  const yesterdayDate = new Date(`${today}T00:00:00Z`)
+  yesterdayDate.setUTCDate(yesterdayDate.getUTCDate() - 1)
+  const yesterday = yesterdayDate.toISOString().slice(0, 10)
   const createOverlap = leaves ? overlapSummary(leaves, startDate, endDate) : null
   const reviewOverlap = leaves && reviewLeave ? overlapSummary(leaves, reviewLeave.startDate.slice(0, 10), reviewLeave.endDate.slice(0, 10), reviewLeave.id) : null
   const overlapSignature = (value: ReturnType<typeof overlapSummary>) =>
@@ -134,6 +152,13 @@ export default function LeavesPage() {
       toast({ title: "İzinler yenilenemedi", description: "Çakışmaları kontrol etmek için yeniden deneyin.", variant: "destructive" })
       return
     }
+    if (data.isRetrospective && fresh.data.some(leave =>
+      leave.employeeId === data.employeeId && leave.status !== "rejected" &&
+      leave.startDate.slice(0, 10) <= data.endDate && leave.endDate.slice(0, 10) >= data.startDate,
+    )) {
+      toast({ title: "Bu tarihlerde izin zaten var", description: "Aynı personelin bekleyen veya onaylanmış izni yeniden eklenemez.", variant: "destructive" })
+      return
+    }
     const current = overlapSignature(overlapSummary(fresh.data, data.startDate, data.endDate))
     if (current !== previous) {
       setCreateAcknowledged(false)
@@ -148,13 +173,13 @@ export default function LeavesPage() {
       void queryClient.invalidateQueries({ queryKey: getListLeavesQueryKey() })
       void queryClient.invalidateQueries({ queryKey: getListWorkDebtsQueryKey() })
       void queryClient.invalidateQueries({ predicate: ({ queryKey }) =>
-        JSON.stringify(queryKey).includes("/employees"),
+        ["/employees", "/dashboard", "/daily-work-records", "/activity"].some(path => JSON.stringify(queryKey).includes(path)),
       })
       setIsCreateOpen(false)
         form.reset()
         setCreateAcknowledged(false)
       setAttachments([])
-      toast({ title: "İzin talebi oluşturuldu" })
+      toast({ title: data.isRetrospective ? "Geçmiş izin sonradan eklendi" : "İzin talebi oluşturuldu" })
     } catch (error) {
       toast({ title: "Talep kaydedilemedi", description: error instanceof Error ? error.message : "Belgeler yüklenemedi.", variant: "destructive" })
     } finally {
@@ -253,15 +278,32 @@ export default function LeavesPage() {
              }
           }}>
             <DialogTrigger asChild>
-              <Button className="gap-2"><Plus className="h-4 w-4" /> Yeni Talep</Button>
+              <Button className="gap-2"><Plus className="h-4 w-4" /> İzin Ekle</Button>
             </DialogTrigger>
               <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
               <DialogHeader>
-                <DialogTitle>Yeni İzin Talebi</DialogTitle>
+                <DialogTitle>{retrospective ? "Geçmişte Kullanılmış İzin Ekle" : "Yeni İzin Talebi"}</DialogTitle>
               </DialogHeader>
               <Form {...form}>
                  <form onSubmit={form.handleSubmit(onSubmitCreate)} className="space-y-4">
                    <fieldset disabled={uploading || createMutation.isPending} className="space-y-4">
+                  <FormField control={form.control} name="isRetrospective" render={({ field }) => (
+                    <FormItem className="rounded-lg border bg-muted/30 p-3">
+                      <FormLabel className="flex cursor-pointer items-center gap-2">
+                        <FormControl><input type="checkbox" checked={field.value} onChange={event => {
+                          field.onChange(event.target.checked)
+                          setCreateAcknowledged(false)
+                          if (event.target.checked && form.getValues("endDate") >= today) {
+                            form.setValue("startDate", yesterday)
+                            form.setValue("endDate", yesterday)
+                          }
+                        }} className="h-4 w-4 accent-primary" data-testid="input-retrospective-leave" /></FormControl>
+                        Geçmişte kullanılmış izin
+                      </FormLabel>
+                      <p className="text-xs leading-5 text-muted-foreground">Bu yıl içinde daha önce kullanılmış izni kaydedin. Yönetici ve İK ekleyebilir. Kayıt doğrudan onaylı olur, “Sonradan eklendi” etiketi taşır ve ilgili izin bakiyesine işlenir.</p>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
                   <FormField control={form.control} name="employeeId" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Personel</FormLabel>
@@ -358,14 +400,14 @@ export default function LeavesPage() {
                     <FormField control={form.control} name="startDate" render={({ field }) => (
                       <FormItem>
                         <FormLabel>Başlangıç</FormLabel>
-                        <FormControl><Input type="date" {...field} onChange={event => { field.onChange(event); setCreateAcknowledged(false) }} /></FormControl>
+                        <FormControl><Input type="date" {...field} min={retrospective ? `${today.slice(0, 4)}-01-01` : undefined} max={retrospective ? yesterday : undefined} onChange={event => { field.onChange(event); setCreateAcknowledged(false) }} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )} />
                     <FormField control={form.control} name="endDate" render={({ field }) => (
                       <FormItem>
                         <FormLabel>Bitiş</FormLabel>
-                        <FormControl><Input type="date" {...field} onChange={event => { field.onChange(event); setCreateAcknowledged(false) }} /></FormControl>
+                        <FormControl><Input type="date" {...field} min={retrospective ? `${today.slice(0, 4)}-01-01` : undefined} max={retrospective ? yesterday : undefined} onChange={event => { field.onChange(event); setCreateAcknowledged(false) }} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )} />
@@ -417,7 +459,7 @@ export default function LeavesPage() {
                      </ul>}
                    </div>
                   <DialogFooter>
-                      <Button type="submit" disabled={uploading || createMutation.isPending || leavesLoading || leavesFetching || leavesError || !leaves || !!createOverlap?.matches.length && (!createAcknowledged || createAcknowledgedSignature !== overlapSignature(createOverlap))}>{uploading ? "Belgeler yükleniyor..." : createMutation.isPending ? "Kaydediliyor..." : "Kaydet"}</Button>
+                      <Button type="submit" disabled={uploading || createMutation.isPending || leavesLoading || leavesFetching || leavesError || !leaves || !!createOverlap?.matches.length && (!createAcknowledged || createAcknowledgedSignature !== overlapSignature(createOverlap))}>{uploading ? "Belgeler yükleniyor..." : createMutation.isPending ? "Kaydediliyor..." : retrospective ? "Kullanılmış izni kaydet" : "Kaydet"}</Button>
                   </DialogFooter>
                    </fieldset>
                 </form>
@@ -490,6 +532,7 @@ export default function LeavesPage() {
                           {leave.status === 'approved' ? 'Onaylandı' : 
                            leave.status === 'rejected' ? 'Reddedildi' : 'Bekliyor'}
                         </Badge>
+                        <LeaveEntryBadge leave={leave} />
                       </TableCell>
                       <TableCell className="min-w-[175px] text-sm">
                         {leave.status === "pending" ? (
@@ -508,7 +551,7 @@ export default function LeavesPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        {leave.status === 'pending' && isManager ? (
+                        {leave.status === 'pending' && canManageOperations ? (
                           <div className="flex items-center justify-end gap-2">
                             <Button 
                               variant="outline" 
@@ -532,7 +575,7 @@ export default function LeavesPage() {
                             </Button>
                           </div>
                         ) : (
-                          <span className="text-xs text-muted-foreground">{leave.status === "pending" ? "Yönetici onayı bekliyor" : "İşlem yapıldı"}</span>
+                          <span className="text-xs text-muted-foreground">{leave.status === "pending" ? "Onay bekliyor" : "İşlem yapıldı"}</span>
                         )}
                       </TableCell>
                     </TableRow>

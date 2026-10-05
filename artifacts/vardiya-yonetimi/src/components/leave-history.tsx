@@ -2,6 +2,7 @@ import { useMemo, useState } from "react"
 import type { Leave } from "@workspace/api-client-react"
 import { CalendarDays, Check, ChevronDown, ChevronsUpDown, FileText, Search, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { LeaveEntryBadge } from "@/components/leave-entry-badge"
 import { Button } from "@/components/ui/button"
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -225,6 +226,7 @@ export function LeaveHistory({ leaves, loading }: LeaveHistoryProps) {
                     <div className="min-w-0">
                       <span className="block truncate text-sm font-semibold text-foreground" data-testid={`text-history-person-${leave.id}`}>{leave.employeeName}</span>
                       <span className="mt-0.5 block truncate text-xs text-muted-foreground">{leaveTypes[leave.type] ?? leave.type} · {leave.settlementType === "debt" ? "Borç izin" : "Tam izin"}</span>
+                      <LeaveEntryBadge leave={leave} />
                     </div>
                     <span className="mt-1 block text-xs text-muted-foreground sm:mt-0 sm:text-sm">
                       {formatDate(leave.startDate)} – {formatDate(leave.endDate)}

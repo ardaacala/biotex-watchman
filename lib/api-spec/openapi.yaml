@@ -40,6 +40,66 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DashboardSummary"
+  /admin/users:
+    get:
+      operationId: listManagedUsers
+      tags: [Administration]
+      summary: List all member accounts for managers only
+      responses:
+        "200":
+          description: Member accounts without credentials
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MembershipRequest"
+  /admin/users/{id}/role:
+    patch:
+      operationId: updateManagedUserRole
+      tags: [Administration]
+      summary: Change a member role and revoke their sessions
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserRoleInput"
+      responses:
+        "200":
+          description: Updated member account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MembershipRequest"
+  /admin/users/{id}/password:
+    post:
+      operationId: resetManagedUserPassword
+      tags: [Administration]
+      summary: Replace a member password and revoke their sessions
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserPasswordInput"
+      responses:
+        "204":
+          description: Password changed
+  /admin/users/{id}:
+    delete:
+      operationId: deleteManagedUser
+      tags: [Administration]
+      summary: Delete only a member login account without deleting workforce history
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "204":
+          description: Member account deleted
   /membership-requests:
     get:
       operationId: listMembershipRequests
@@ -157,14 +217,14 @@ paths:
       operationId: deleteEmployee
       tags: [workforce]
       summary: Archive an employee while preserving all history
-      description: Manager-only. Archives the employee; related history is retained.
+      description: Approved managers and HR users can archive the employee; related history is retained.
       parameters:
         - $ref: "#/components/parameters/Id"
       responses:
         "204":
           description: Employee archived
         "403":
-          description: Manager access required
+          description: Approved manager or HR access required
         "404":
           $ref: "#/components/responses/NotFound"
   /storage/photos/upload-url:
@@ -172,7 +232,7 @@ paths:
       operationId: requestEmployeePhotoUploadUrl
       tags: [storage]
       summary: Request a signed upload URL for an employee photo
-      description: Manager-only. Upload bytes directly to the returned URL with the requested Content-Type.
+      description: Available to approved managers and HR users. Upload bytes directly to the returned URL with the requested Content-Type.
       requestBody:
         required: true
         content:
@@ -677,6 +737,16 @@ components:
           type: string
           enum: [pending, approved, rejected]
         createdAt: { type: string, format: date-time }
+    UserRoleInput:
+      type: object
+      required: [role]
+      properties:
+        role: { type: string, enum: [manager, hr] }
+    UserPasswordInput:
+      type: object
+      required: [password]
+      properties:
+        password: { type: string, minLength: 8, maxLength: 128 }
     MembershipReview:
       type: object
       required: [approvalStatus]
@@ -1028,7 +1098,7 @@ components:
         outstandingDebtHours: { type: number }
     Leave:
       type: object
-      required: [id, employeeId, employeeName, type, settlementType, startDate, endDate, days, deductedAnnualHours, annualHourBreakdown, annualCycleBalances, status, note, reviewedByName, reviewedAt, attachments]
+      required: [id, employeeId, employeeName, type, settlementType, startDate, endDate, days, deductedAnnualHours, annualHourBreakdown, annualCycleBalances, status, note, reviewedByName, reviewedAt, attachments, isLateEntry, recordedAt, recordedByName]
       properties:
         id: { type: integer }
         employeeId: { type: integer }
@@ -1053,6 +1123,9 @@ components:
           type: string
           enum: [pending, approved, rejected]
         note: { type: string }
+        isLateEntry: { type: boolean }
+        recordedAt: { type: [string, "null"], format: date-time }
+        recordedByName: { type: [string, "null"] }
         reviewedByName: { type: [string, "null"] }
         reviewedAt: { type: [string, "null"], format: date-time }
         attachments:
@@ -1098,6 +1171,10 @@ components:
       required: [employeeId, type, startDate, endDate, note]
       properties:
         employeeId: { type: integer }
+        isRetrospective:
+          type: boolean
+          default: false
+          description: Record leave already taken earlier in the current Istanbul calendar year as approved.
         type:
           type: string
           enum: [annual, sick, unpaid, other]
@@ -1124,7 +1201,7 @@ components:
         id: { type: integer }
         type:
           type: string
-          enum: [leave, plan, employee]
+          enum: [leave, plan, employee, department]
         title: { type: string }
         description: { type: string }
         createdAt: { type: string, format: date-time }

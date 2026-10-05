@@ -53,6 +53,8 @@ import type {
   OvertimeSession,
   SpecialPeriod,
   SpecialPeriodInput,
+  UserPasswordInput,
+  UserRoleInput,
   WorkDebtReport
 } from './api.schemas';
 
@@ -237,6 +239,335 @@ export function useGetDashboardSummary<TData = Awaited<ReturnType<typeof getDash
 
 
 
+
+export const getListManagedUsersUrl = () => {
+
+
+
+
+  return `/api/admin/users`
+}
+
+/**
+ * @summary List all member accounts for managers only
+ */
+export const listManagedUsers = async ( options?: Parameters<typeof customFetch>[1]): Promise<MembershipRequest[]> => {
+
+  return customFetch<MembershipRequest[]>(getListManagedUsersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListManagedUsersQueryKey = () => {
+    return [
+    `/api/admin/users`
+    ] as const;
+    }
+
+
+export const getListManagedUsersQueryOptions = <TData = Awaited<ReturnType<typeof listManagedUsers>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listManagedUsers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListManagedUsersQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listManagedUsers>>> = ({ signal }) => listManagedUsers({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listManagedUsers>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListManagedUsersQueryResult = NonNullable<Awaited<ReturnType<typeof listManagedUsers>>>
+export type ListManagedUsersQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List all member accounts for managers only
+ */
+
+export function useListManagedUsers<TData = Awaited<ReturnType<typeof listManagedUsers>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listManagedUsers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListManagedUsersQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateManagedUserRoleUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/users/${id}/role`
+}
+
+/**
+ * @summary Change a member role and revoke their sessions
+ */
+export const updateManagedUserRole = async (id: number,
+    userRoleInput: UserRoleInput, options?: Parameters<typeof customFetch>[1]): Promise<MembershipRequest> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<MembershipRequest>(getUpdateManagedUserRoleUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(userRoleInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateManagedUserRoleMutationKey = () => ['updateManagedUserRole'] as const;
+
+export const getUpdateManagedUserRoleMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateManagedUserRole>>, TError,UpdateManagedUserRoleMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateManagedUserRole>>, TError,UpdateManagedUserRoleMutationVariables, TContext> => {
+
+const mutationKey = getUpdateManagedUserRoleMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateManagedUserRole>>, UpdateManagedUserRoleMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateManagedUserRole(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateManagedUserRoleMutationResult = NonNullable<Awaited<ReturnType<typeof updateManagedUserRole>>>
+    export type UpdateManagedUserRoleMutationBody = BodyType<UserRoleInput>
+    export type UpdateManagedUserRoleMutationError = ErrorType<unknown>
+    export type UpdateManagedUserRoleMutationVariables = {id: number;data: BodyType<UserRoleInput>}
+
+    /**
+ * @summary Change a member role and revoke their sessions
+ */
+export const useUpdateManagedUserRole = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateManagedUserRole>>, TError,UpdateManagedUserRoleMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateManagedUserRole>>,
+        TError,
+        UpdateManagedUserRoleMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateManagedUserRoleMutationOptions(options));
+    }
+
+export const getResetManagedUserPasswordUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/users/${id}/password`
+}
+
+/**
+ * @summary Replace a member password and revoke their sessions
+ */
+export const resetManagedUserPassword = async (id: number,
+    userPasswordInput: UserPasswordInput, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<void>(getResetManagedUserPasswordUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(userPasswordInput)
+  }
+);}
+
+
+
+
+
+export const getResetManagedUserPasswordMutationKey = () => ['resetManagedUserPassword'] as const;
+
+export const getResetManagedUserPasswordMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetManagedUserPassword>>, TError,ResetManagedUserPasswordMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resetManagedUserPassword>>, TError,ResetManagedUserPasswordMutationVariables, TContext> => {
+
+const mutationKey = getResetManagedUserPasswordMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resetManagedUserPassword>>, ResetManagedUserPasswordMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  resetManagedUserPassword(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResetManagedUserPasswordMutationResult = NonNullable<Awaited<ReturnType<typeof resetManagedUserPassword>>>
+    export type ResetManagedUserPasswordMutationBody = BodyType<UserPasswordInput>
+    export type ResetManagedUserPasswordMutationError = ErrorType<unknown>
+    export type ResetManagedUserPasswordMutationVariables = {id: number;data: BodyType<UserPasswordInput>}
+
+    /**
+ * @summary Replace a member password and revoke their sessions
+ */
+export const useResetManagedUserPassword = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetManagedUserPassword>>, TError,ResetManagedUserPasswordMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resetManagedUserPassword>>,
+        TError,
+        ResetManagedUserPasswordMutationVariables,
+        TContext
+      > => {
+      return useMutation(getResetManagedUserPasswordMutationOptions(options));
+    }
+
+export const getDeleteManagedUserUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/users/${id}`
+}
+
+/**
+ * @summary Delete only a member login account without deleting workforce history
+ */
+export const deleteManagedUser = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteManagedUserUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteManagedUserMutationKey = () => ['deleteManagedUser'] as const;
+
+export const getDeleteManagedUserMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteManagedUser>>, TError,DeleteManagedUserMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteManagedUser>>, TError,DeleteManagedUserMutationVariables, TContext> => {
+
+const mutationKey = getDeleteManagedUserMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteManagedUser>>, DeleteManagedUserMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteManagedUser(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteManagedUserMutationResult = NonNullable<Awaited<ReturnType<typeof deleteManagedUser>>>
+
+    export type DeleteManagedUserMutationError = ErrorType<unknown>
+    export type DeleteManagedUserMutationVariables = {id: number}
+
+    /**
+ * @summary Delete only a member login account without deleting workforce history
+ */
+export const useDeleteManagedUser = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteManagedUser>>, TError,DeleteManagedUserMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteManagedUser>>,
+        TError,
+        DeleteManagedUserMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteManagedUserMutationOptions(options));
+    }
 
 export const getListMembershipRequestsUrl = () => {
 
@@ -751,7 +1082,7 @@ export const getDeleteEmployeeUrl = (id: number,) => {
 }
 
 /**
- * Manager-only. Archives the employee; related history is retained.
+ * Approved managers and HR users can archive the employee; related history is retained.
  * @summary Archive an employee while preserving all history
  */
 export const deleteEmployee = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
@@ -826,7 +1157,7 @@ export const getRequestEmployeePhotoUploadUrlUrl = () => {
 }
 
 /**
- * Manager-only. Upload bytes directly to the returned URL with the requested Content-Type.
+ * Available to approved managers and HR users. Upload bytes directly to the returned URL with the requested Content-Type.
  * @summary Request a signed upload URL for an employee photo
  */
 export const requestEmployeePhotoUploadUrl = async (employeePhotoUploadUrlInput: EmployeePhotoUploadUrlInput, options?: Parameters<typeof customFetch>[1]): Promise<EmployeePhotoUploadUrl> => {

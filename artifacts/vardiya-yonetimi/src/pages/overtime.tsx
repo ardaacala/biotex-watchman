@@ -17,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
-import { useAuth } from "@/lib/auth"
+import { hasOperationalAccess, useAuth } from "@/lib/auth"
 import { useToast } from "@/hooks/use-toast"
 
 type ScheduleForm = {
@@ -138,7 +138,7 @@ function SessionCard({ session, editable, onDelete, onSaved }: {
 
 export default function OvertimePage() {
   const { user } = useAuth()
-  const editable = user?.role === "manager"
+  const editable = hasOperationalAccess(user?.role)
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const { data: sessions = [], isLoading, isError, refetch } = useListOvertime()

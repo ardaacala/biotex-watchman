@@ -13,4 +13,5 @@ export const ActivityType = {
   leave: 'leave',
   plan: 'plan',
   employee: 'employee',
+  department: 'department',
 } as const;
