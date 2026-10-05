@@ -430,15 +430,16 @@ export default function EmployeesPage() {
                 <TableRow>
                   <TableHead className="w-[80px] px-2 sm:px-4">Sicil</TableHead>
                   <TableHead>Personel</TableHead>
+                  <TableHead className="px-2 sm:px-4">Departman ve Görev</TableHead>
                   <TableHead className="w-[80px] px-2 sm:px-4">Durum</TableHead>
                   <TableHead className="w-[52px] px-2"><span className="sr-only">Detaylar</span></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
-                  <TableRow><TableCell colSpan={4} className="text-center py-8">Yükleniyor...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={5} className="text-center py-8">Yükleniyor...</TableCell></TableRow>
                 ) : filteredEmployees.length === 0 ? (
-                  <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Kayıt bulunamadı</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Kayıt bulunamadı</TableCell></TableRow>
                 ) : (
                   filteredEmployees.map((employee) => (
                     <Fragment key={employee.id}>
@@ -452,9 +453,15 @@ export default function EmployeesPage() {
                               {employee.name.split(" ").map((name) => name[0]).join("").substring(0, 2)}
                             </AvatarFallback>
                           </Avatar>
-                          <div className="flex flex-col">
+                          <div className="flex min-w-0 flex-col gap-0.5">
                             <span className="font-medium text-foreground">{employee.name}</span>
                           </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="px-2 sm:px-4">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-sm font-medium text-foreground" data-testid={`text-employee-department-${employee.id}`}>{employee.department}</span>
+                          <span className="text-xs text-muted-foreground break-words" data-testid={`text-employee-role-${employee.id}`}>{employee.role}</span>
                         </div>
                       </TableCell>
                       <TableCell className="px-2 sm:px-4">
@@ -478,16 +485,9 @@ export default function EmployeesPage() {
                       </TableCell>
                     </TableRow>
                     <TableRow id={`employee-details-${employee.id}`} hidden={!expandedEmployees.has(employee.id)} className="bg-muted/25 hover:bg-muted/25" data-testid={`details-employee-${employee.id}`}>
-                      <TableCell colSpan={4} className="p-4 sm:p-5">
+                      <TableCell colSpan={5} className="p-4 sm:p-5">
                         {expandedEmployees.has(employee.id) && <>
-                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                        <div>
-                          <p className="mb-1 text-xs font-medium text-muted-foreground">Departman &amp; Görev</p>
-                        <div className="flex flex-col">
-                          <span className="text-sm font-medium">{employee.department}</span>
-                          <span className="text-xs text-muted-foreground">{employee.role}</span>
-                        </div>
-                        </div>
+                        <div className="grid gap-4 sm:grid-cols-2">
                         <div>
                           <p className="mb-1 text-xs font-medium text-muted-foreground">İşe Giriş</p>
                           <p className={`text-sm ${employee.hireDate ? "" : "font-medium text-amber-700"}`}>
