@@ -6,6 +6,7 @@ import membershipsRouter from "./memberships";
 import adminUsersRouter from "./admin-users";
 import overtimeRouter from "./overtime";
 import storageRouter from "./storage";
+import calendarEventsRouter from "./calendar-events";
 
 const router: IRouter = Router();
 
@@ -15,6 +16,7 @@ router.use(membershipsRouter);
 router.use(adminUsersRouter);
 router.use(overtimeRouter);
 router.use(storageRouter);
+router.use(calendarEventsRouter);
 router.use(workforceRouter);
 
 export default router;

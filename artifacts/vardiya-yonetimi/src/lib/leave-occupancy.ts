@@ -59,6 +59,29 @@ export function dayOccupancy(leaves: OccupancyLeave[], date: string) {
   return overlapSummary(leaves, date, date)!
 }
 
+// Mirrors the server's hard annual-leave limit; acknowledgment cannot override it.
+export function annualCapacityConflict(
+  leaves: (OccupancyLeave & Pick<Leave, "type">)[], start: string, end: string, employeeId: number, excludeId?: number,
+): string | null {
+  if (!validDay(start) || !validDay(end) || start > end) return null
+  const approved = leaves.filter(leave =>
+    leave.type === "annual" && leave.status === "approved" &&
+    leave.employeeId !== employeeId && leave.id !== excludeId &&
+    dayKey(leave.startDate) <= end && dayKey(leave.endDate) >= start,
+  )
+  let first: string | null = null
+  for (let i = 0; i < approved.length; i++) {
+    for (let j = i + 1; j < approved.length; j++) {
+      const a = approved[i], b = approved[j]
+      if (a.employeeId === b.employeeId) continue
+      const from = [start, dayKey(a.startDate), dayKey(b.startDate)].sort().at(-1)!
+      const to = [end, dayKey(a.endDate), dayKey(b.endDate)].sort()[0]
+      if (from <= to && (!first || from < first)) first = from
+    }
+  }
+  return first
+}
+
 export function formatDay(value: string, options: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" }): string {
   return new Intl.DateTimeFormat("tr-TR", { ...options, timeZone: "UTC" }).format(new Date(`${dayKey(value)}T12:00:00Z`))
 }

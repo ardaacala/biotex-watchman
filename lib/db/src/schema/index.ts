@@ -19,3 +19,4 @@
 
 export * from "./workforce";
 export * from "./auth";
+export * from "./calendar-events";

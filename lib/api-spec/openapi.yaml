@@ -482,6 +482,70 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DepartmentSchedule"
+  /calendar-events:
+    get:
+      operationId: listCalendarEvents
+      tags: [workforce]
+      summary: List informational calendar events
+      responses:
+        "200":
+          description: Calendar events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CalendarEvent"
+    post:
+      operationId: createCalendarEvent
+      tags: [workforce]
+      summary: Create an informational event (manager or HR)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CalendarEventInput"
+      responses:
+        "201":
+          description: Created calendar event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarEvent"
+  /calendar-events/{id}:
+    patch:
+      operationId: updateCalendarEvent
+      tags: [workforce]
+      summary: Update an informational event (manager or HR)
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CalendarEventInput"
+      responses:
+        "200":
+          description: Updated calendar event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarEvent"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteCalendarEvent
+      tags: [workforce]
+      summary: Delete an informational event (manager or HR)
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "204":
+          description: Deleted calendar event
+        "404":
+          $ref: "#/components/responses/NotFound"
   /special-periods:
     get:
       operationId: listSpecialPeriods
@@ -890,6 +954,26 @@ components:
           maxItems: 7
           items:
             $ref: "#/components/schemas/ScheduleDay"
+    CalendarEvent:
+      type: object
+      required: [id, title, description, startDate, endDate, createdByName, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        description: { type: string }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        createdByName: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CalendarEventInput:
+      type: object
+      required: [title, startDate, endDate]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 160 }
+        description: { type: string, maxLength: 2000 }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
     SpecialPeriod:
       type: object
       required: [id, department, name, startDate, endDate, days, totalHours]

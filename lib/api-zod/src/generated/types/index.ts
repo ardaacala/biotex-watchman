@@ -11,6 +11,8 @@ export * from './activityTone';
 export * from './activityType';
 export * from './annualCycleBalance';
 export * from './annualHourEntry';
+export * from './calendarEvent';
+export * from './calendarEventInput';
 export * from './dailyEmployeeWorkRecord';
 export * from './dailyEmployeeWorkRecordInput';
 export * from './dailyWorkRecords';

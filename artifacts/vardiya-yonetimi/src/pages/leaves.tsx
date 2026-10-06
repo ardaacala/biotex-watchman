@@ -1,4 +1,5 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import { useSearch } from "wouter"
 import { useQueryClient } from "@tanstack/react-query"
 import { Layout } from "@/components/layout"
 import { Button } from "@/components/ui/button"
@@ -21,8 +22,9 @@ import { useToast } from "@/hooks/use-toast"
 import { LeaveHistory } from "@/components/leave-history"
 import { LeaveEntryBadge } from "@/components/leave-entry-badge"
 import { LeaveCalendar } from "@/components/leave-calendar"
+import { CalendarDays } from "lucide-react"
 import { LeaveOverlap } from "@/components/leave-overlap"
-import { overlapSummary, todayInIstanbul } from "@/lib/leave-occupancy"
+import { annualCapacityConflict, formatDay, overlapSummary, todayInIstanbul } from "@/lib/leave-occupancy"
 
 const allowedAttachmentTypes = new Set([
   "image/jpeg", "image/png", "image/webp", "application/pdf",
@@ -84,6 +86,8 @@ const leaveSchema = z.object({
 type LeaveFormValues = z.infer<typeof leaveSchema>
 
 export default function LeavesPage() {
+  const search = useSearch()
+  const handledEntry = useRef("")
   const [searchTerm, setSearchTerm] = useState("")
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [employeePickerOpen, setEmployeePickerOpen] = useState(false)
@@ -91,6 +95,7 @@ export default function LeavesPage() {
   const [attachmentError, setAttachmentError] = useState("")
   const [uploading, setUploading] = useState(false)
   const [reviewSnapshot, setReviewLeave] = useState<Leave | null>(null)
+  const [calendarOpen, setCalendarOpen] = useState(false)
   const [reviewDecision, setReviewDecision] = useState<LeaveStatusUpdateStatus | null>(null)
   const [createAcknowledged, setCreateAcknowledged] = useState(false)
   const [reviewAcknowledged, setReviewAcknowledged] = useState(false)
@@ -103,8 +108,9 @@ export default function LeavesPage() {
   const queryClient = useQueryClient()
   const { data: leaves, isLoading: leavesLoading, isFetching: leavesFetching, isError: leavesError, refetch: refetchLeaves } = useListLeaves()
   const reviewLeave = reviewSnapshot && (leaves?.find(leave => leave.id === reviewSnapshot.id) ?? reviewSnapshot)
+  useEffect(() => { if (!reviewSnapshot) setCalendarOpen(false) }, [reviewSnapshot])
   const reviewStillPending = !!reviewSnapshot && !!leaves?.some(leave => leave.id === reviewSnapshot.id && leave.status === "pending")
-  const { data: employees = [], isLoading: employeesLoading } = useListEmployees({ status: 'active' })
+  const { data: allEmployees = [], isLoading: employeesLoading } = useListEmployees({ status: 'all' })
   const { data: workDebtReport, isLoading: workDebtsLoading, isError: workDebtsError, refetch: refetchWorkDebts } = useListWorkDebts({
     query: { enabled: canManageOperations, queryKey: getListWorkDebtsQueryKey() },
   })
@@ -124,16 +130,45 @@ export default function LeavesPage() {
       note: ""
     }
   })
-  const selectedEmployee = employees.find((employee) => employee.id === form.watch("employeeId"))
   const startDate = form.watch("startDate")
   const endDate = form.watch("endDate")
   const retrospective = form.watch("isRetrospective")
+  const leaveType = form.watch("type")
+  const employeeId = form.watch("employeeId")
+  const employees = allEmployees.filter(employee => retrospective || employee.status === "active")
+  const selectedEmployee = employees.find((employee) => employee.id === form.watch("employeeId"))
   const today = todayInIstanbul()
   const yesterdayDate = new Date(`${today}T00:00:00Z`)
   yesterdayDate.setUTCDate(yesterdayDate.getUTCDate() - 1)
   const yesterday = yesterdayDate.toISOString().slice(0, 10)
+  useEffect(() => {
+    if (!canManageOperations || !search || handledEntry.current === search) return
+    const params = new URLSearchParams(search)
+    const employeeId = Number(params.get("employeeId"))
+    if (params.get("mode") !== "retrospective" || !Number.isSafeInteger(employeeId) || employeeId <= 0) return
+    handledEntry.current = search
+    form.reset({
+      isRetrospective: true,
+      employeeId,
+      type: "annual",
+      settlementType: "full",
+      startDate: yesterday,
+      endDate: yesterday,
+      note: "",
+    })
+    setAttachments([])
+    setAttachmentError("")
+    setCreateAcknowledged(false)
+    setIsCreateOpen(true)
+    void refetchLeaves()
+  }, [search, canManageOperations, form, yesterday, refetchLeaves])
   const createOverlap = leaves ? overlapSummary(leaves, startDate, endDate) : null
   const reviewOverlap = leaves && reviewLeave ? overlapSummary(leaves, reviewLeave.startDate.slice(0, 10), reviewLeave.endDate.slice(0, 10), reviewLeave.id) : null
+  const createCapacityConflict = leaves && leaveType === "annual"
+    ? annualCapacityConflict(leaves, startDate, endDate, employeeId) : null
+  const reviewCapacityConflict = leaves && reviewLeave?.type === "annual" && reviewDecision === "approved"
+    ? annualCapacityConflict(leaves, reviewLeave.startDate.slice(0, 10), reviewLeave.endDate.slice(0, 10), reviewLeave.employeeId, reviewLeave.id) : null
+  const capacityMessage = (date: string) => `${formatDay(date)} tarihinde iki farklı personelin yıllık izni onaylı. Aynı gün üçüncü bir kişi yıllık izin alamaz. Tarihleri değiştirin; çakışma onayı bu sınırı kaldırmaz.`
   const overlapSignature = (value: ReturnType<typeof overlapSummary>) =>
     value?.matches.map(item => `${item.id}:${item.status}:${item.startDate}:${item.endDate}`).join("|") ?? ""
 
@@ -150,6 +185,12 @@ export default function LeavesPage() {
     const fresh = await refetchLeaves()
     if (fresh.isError || !fresh.data) {
       toast({ title: "İzinler yenilenemedi", description: "Çakışmaları kontrol etmek için yeniden deneyin.", variant: "destructive" })
+      return
+    }
+    const capacityConflict = data.type === "annual"
+      ? annualCapacityConflict(fresh.data, data.startDate, data.endDate, data.employeeId) : null
+    if (capacityConflict) {
+      toast({ title: "Yıllık izin sınırı dolu", description: capacityMessage(capacityConflict), variant: "destructive" })
       return
     }
     if (data.isRetrospective && fresh.data.some(leave =>
@@ -221,6 +262,12 @@ export default function LeavesPage() {
       toast({ title: "Talep tarihleri değişti", description: "Güncel tarihleri ve çakışmaları yeniden inceleyin.", variant: "destructive" })
       return
     }
+    const capacityConflict = status === "approved" && freshRequest.type === "annual"
+      ? annualCapacityConflict(fresh.data, freshRequest.startDate.slice(0, 10), freshRequest.endDate.slice(0, 10), freshRequest.employeeId, id) : null
+    if (capacityConflict) {
+      toast({ title: "Yıllık izin onaylanamaz", description: capacityMessage(capacityConflict), variant: "destructive" })
+      return
+    }
     const current = overlapSignature(overlapSummary(fresh.data, reviewLeave.startDate.slice(0, 10), reviewLeave.endDate.slice(0, 10), id))
     if (current !== previous) {
       setReviewAcknowledged(false)
@@ -282,7 +329,7 @@ export default function LeavesPage() {
             </DialogTrigger>
               <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
               <DialogHeader>
-                <DialogTitle>{retrospective ? "Geçmişte Kullanılmış İzin Ekle" : "Yeni İzin Talebi"}</DialogTitle>
+                <DialogTitle>{retrospective ? "Geçmiş izin ekle" : "Yeni İzin Talebi"}</DialogTitle>
               </DialogHeader>
               <Form {...form}>
                  <form onSubmit={form.handleSubmit(onSubmitCreate)} className="space-y-4">
@@ -292,6 +339,9 @@ export default function LeavesPage() {
                       <FormLabel className="flex cursor-pointer items-center gap-2">
                         <FormControl><input type="checkbox" checked={field.value} onChange={event => {
                           field.onChange(event.target.checked)
+                          if (!event.target.checked && selectedEmployee?.status === "inactive") {
+                            form.setValue("employeeId", 0)
+                          }
                           setCreateAcknowledged(false)
                           if (event.target.checked && form.getValues("endDate") >= today) {
                             form.setValue("startDate", yesterday)
@@ -413,6 +463,7 @@ export default function LeavesPage() {
                     )} />
                   </div>
                   <LeaveOverlap summary={createOverlap} loading={leavesLoading || leavesFetching} error={leavesError} onRetry={() => { void refetchLeaves() }} decision="create" />
+                  {createCapacityConflict && <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive" data-testid="alert-annual-capacity-create">{capacityMessage(createCapacityConflict)}</p>}
                   {(leavesFetching || leavesError) && <p role="status" className="text-xs text-muted-foreground">İzin kontrolü tamamlanmadan talep gönderilemez.</p>}
                   {!!createOverlap?.matches.length && <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border bg-card p-3 text-sm leading-5">
                     <input type="checkbox" checked={createAcknowledged && createAcknowledgedSignature === overlapSignature(createOverlap)} onChange={event => { setCreateAcknowledged(event.target.checked); setCreateAcknowledgedSignature(overlapSignature(createOverlap)) }} className="mt-1 accent-primary" data-testid="input-acknowledge-create-overlap" />
@@ -459,7 +510,7 @@ export default function LeavesPage() {
                      </ul>}
                    </div>
                   <DialogFooter>
-                      <Button type="submit" disabled={uploading || createMutation.isPending || leavesLoading || leavesFetching || leavesError || !leaves || !!createOverlap?.matches.length && (!createAcknowledged || createAcknowledgedSignature !== overlapSignature(createOverlap))}>{uploading ? "Belgeler yükleniyor..." : createMutation.isPending ? "Kaydediliyor..." : retrospective ? "Kullanılmış izni kaydet" : "Kaydet"}</Button>
+                      <Button type="submit" disabled={!!createCapacityConflict || uploading || createMutation.isPending || leavesLoading || leavesFetching || leavesError || !leaves || !!createOverlap?.matches.length && (!createAcknowledged || createAcknowledgedSignature !== overlapSignature(createOverlap))}>{uploading ? "Belgeler yükleniyor..." : createMutation.isPending ? "Kaydediliyor..." : retrospective ? "Kullanılmış izni kaydet" : "Kaydet"}</Button>
                   </DialogFooter>
                    </fieldset>
                 </form>
@@ -608,7 +659,16 @@ export default function LeavesPage() {
                     </p>
                     {reviewLeave.note && <p className="mt-3 whitespace-pre-wrap break-words text-sm">{reviewLeave.note}</p>}
                   </section>
+                  <div><Button type="button" variant="outline" className="gap-2" onClick={() => setCalendarOpen(true)} data-testid="button-view-in-calendar"><CalendarDays className="h-4 w-4" />Takvimde görüntüle</Button></div>
+                  <Dialog open={calendarOpen} onOpenChange={setCalendarOpen}>
+                    <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-5xl" data-testid="dialog-review-calendar">
+                      <DialogHeader><DialogTitle>Takvimde görüntüle · {reviewLeave.employeeName}</DialogTitle></DialogHeader>
+                      <LeaveCalendar leaves={leaves ?? []} loading={leavesLoading || leavesFetching && !leaves} error={leavesError} onRetry={() => { void refetchLeaves() }} focus={{ leaveId: reviewLeave.id, employeeName: reviewLeave.employeeName, start: reviewLeave.startDate.slice(0, 10), end: reviewLeave.endDate.slice(0, 10) }} />
+                      <DialogFooter><Button type="button" onClick={() => setCalendarOpen(false)} data-testid="button-close-review-calendar">İncelemeye dön</Button></DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                   <LeaveOverlap summary={reviewOverlap} loading={leavesLoading || leavesFetching} error={leavesError} onRetry={() => { void refetchLeaves() }} decision={reviewDecision === "approved" ? "approved" : "rejected"} />
+                  {reviewCapacityConflict && <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive" data-testid="alert-annual-capacity-review">{capacityMessage(reviewCapacityConflict)}</p>}
                   {!leavesFetching && !leavesError && !reviewStillPending && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">Bu talep artık beklemede değil veya listede bulunmuyor. Karar verilemez; pencereyi kapatıp listeyi kontrol edin.</p>}
                   {(leavesFetching || leavesError) && <p role="status" className="text-xs text-muted-foreground">İzin kontrolü tamamlanmadan karar verilemez.</p>}
                   {!!reviewOverlap?.matches.length && <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border bg-card p-3 text-sm leading-5">
@@ -688,7 +748,7 @@ export default function LeavesPage() {
                       variant={reviewDecision === "approved" ? "default" : "destructive"}
                       data-testid="button-confirm-leave-review"
                       onClick={() => handleStatusUpdate(reviewLeave.id, reviewDecision!)}
-                      disabled={updateStatusMutation.isPending || !reviewStillPending || workDebtsLoading || workDebtsError || !workDebtReport || leavesLoading || leavesFetching || leavesError || !leaves || !!reviewOverlap?.matches.length && (!reviewAcknowledged || reviewAcknowledgedSignature !== overlapSignature(reviewOverlap))}
+                      disabled={!!reviewCapacityConflict || updateStatusMutation.isPending || !reviewStillPending || workDebtsLoading || workDebtsError || !workDebtReport || leavesLoading || leavesFetching || leavesError || !leaves || !!reviewOverlap?.matches.length && (!reviewAcknowledged || reviewAcknowledgedSignature !== overlapSignature(reviewOverlap))}
                     >
                       {updateStatusMutation.isPending ? "Kaydediliyor…" : reviewDecision === "approved" ? "Onayla" : "Reddet"}
                     </Button>

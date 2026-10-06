@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { hasBookedOverlap, retrospectiveDateError } from "../lib/retrospective-leave";
+import { annualCapacityConflict, annualCapacityMessage } from "../lib/annual-leave-capacity";
 import {
   and,
   asc,
@@ -1180,10 +1181,21 @@ router.post("/leaves", requireWorkforceEditor, async (req, res): Promise<void> =
   }
   const recordedAt = new Date();
   const result = await db.transaction(async (tx) => {
+    // All leave creations/reviews take this lock before row locks. Different
+    // employees can otherwise approve a third leave concurrently.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(20261006, 2)`);
     const [employee] = await tx.select().from(employeesTable)
       .where(eq(employeesTable.id, parsed.data.employeeId)).for("update");
     if (!employee) return { error: "Çalışan bulunamadı", status: 404 } as const;
     if (employee.deletedAt !== null) return { error: "Arşivlenmiş çalışan için yeni izin oluşturulamaz", status: 404 } as const;
+    if (parsed.data.type === "annual") {
+      const approved = await tx.select().from(leavesTable).where(and(
+        eq(leavesTable.type, "annual"), eq(leavesTable.status, "approved"),
+        lte(leavesTable.startDate, endDate), gte(leavesTable.endDate, startDate),
+      ));
+      const conflict = annualCapacityConflict(approved, startDate, endDate, employee.id);
+      if (conflict) return { error: annualCapacityMessage(conflict), status: 400 } as const;
+    }
     if (retrospective) {
       if (!employee.hireDate) {
         return { error: "Geçmiş izin eklemeden önce personelin işe giriş tarihini kaydedin.", status: 400 } as const;
@@ -1292,6 +1304,7 @@ router.patch("/leaves/:id/status", requireWorkforceEditor, async (req, res): Pro
     return;
   }
   const result = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(20261006, 2)`);
     const [previous] = await tx.select().from(leavesTable)
       .where(eq(leavesTable.id, params.data.id)).for("update");
     if (!previous) return null;
@@ -1322,6 +1335,14 @@ router.patch("/leaves/:id/status", requireWorkforceEditor, async (req, res): Pro
     }
     const [lockedEmployee] = await tx.select().from(employeesTable)
       .where(eq(employeesTable.id, previous.employeeId)).for("update");
+    if (previous.type === "annual" && body.data.status === "approved") {
+      const approved = await tx.select().from(leavesTable).where(and(
+        eq(leavesTable.type, "annual"), eq(leavesTable.status, "approved"),
+        lte(leavesTable.startDate, previous.endDate), gte(leavesTable.endDate, previous.startDate),
+      ));
+      const conflict = annualCapacityConflict(approved, previous.startDate, previous.endDate, previous.employeeId, previous.id);
+      if (conflict) return { error: annualCapacityMessage(conflict), status: 400 } as const;
+    }
     const annualFull = previous.type === "annual" && previous.settlementType === "full";
     let quota = 14;
     if (annualFull) {

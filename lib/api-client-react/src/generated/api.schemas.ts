@@ -268,6 +268,29 @@ export interface DepartmentScheduleInput {
   days: ScheduleDay[];
 }
 
+export interface CalendarEvent {
+  id: number;
+  title: string;
+  description: string;
+  startDate: string;
+  endDate: string;
+  createdByName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CalendarEventInput {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  title: string;
+  /** @maxLength 2000 */
+  description?: string;
+  startDate: string;
+  endDate: string;
+}
+
 export interface SpecialPeriod {
   id: number;
   department: string;

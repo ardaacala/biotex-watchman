@@ -720,6 +720,92 @@ export const SaveDepartmentScheduleResponse = zod.object({
 
 
 /**
+ * @summary List informational calendar events
+ */
+export const ListCalendarEventsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "title": zod.string(),
+  "description": zod.string(),
+  "startDate": zod.coerce.date(),
+  "endDate": zod.coerce.date(),
+  "createdByName": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListCalendarEventsResponse = zod.array(ListCalendarEventsResponseItem)
+
+
+/**
+ * @summary Create an informational event (manager or HR)
+ */
+export const createCalendarEventBodyTitleMax = 160;
+
+export const createCalendarEventBodyDescriptionMax = 2000;
+
+
+
+export const CreateCalendarEventBody = zod.object({
+  "title": zod.string().min(1).max(createCalendarEventBodyTitleMax),
+  "description": zod.string().max(createCalendarEventBodyDescriptionMax).optional(),
+  "startDate": zod.coerce.date(),
+  "endDate": zod.coerce.date()
+})
+
+export const CreateCalendarEventResponse = zod.object({
+  "id": zod.number().int(),
+  "title": zod.string(),
+  "description": zod.string(),
+  "startDate": zod.coerce.date(),
+  "endDate": zod.coerce.date(),
+  "createdByName": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update an informational event (manager or HR)
+ */
+export const UpdateCalendarEventParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const updateCalendarEventBodyTitleMax = 160;
+
+export const updateCalendarEventBodyDescriptionMax = 2000;
+
+
+
+export const UpdateCalendarEventBody = zod.object({
+  "title": zod.string().min(1).max(updateCalendarEventBodyTitleMax),
+  "description": zod.string().max(updateCalendarEventBodyDescriptionMax).optional(),
+  "startDate": zod.coerce.date(),
+  "endDate": zod.coerce.date()
+})
+
+export const UpdateCalendarEventResponse = zod.object({
+  "id": zod.number().int(),
+  "title": zod.string(),
+  "description": zod.string(),
+  "startDate": zod.coerce.date(),
+  "endDate": zod.coerce.date(),
+  "createdByName": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete an informational event (manager or HR)
+ */
+export const DeleteCalendarEventParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const DeleteCalendarEventResponse = zod.void()
+
+
+/**
  * @summary List special work periods
  */
 export const listSpecialPeriodsResponseDaysItemWeekdayMax = 7;

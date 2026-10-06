@@ -59,6 +59,7 @@ export default function EmployeesPage() {
   const { user } = useAuth()
   const canManageEmployees = hasOperationalAccess(user?.role)
   const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState<"active" | "inactive" | "all">("active")
   const [expandedEmployees, setExpandedEmployees] = useState<Set<number>>(() => new Set())
   const toggleEmployeeDetails = (id: number) => {
     setExpandedEmployees((current) => {
@@ -80,7 +81,7 @@ export default function EmployeesPage() {
 
   const queryClient = useQueryClient()
   const { toast } = useToast()
-  const { data: employees = [], isLoading } = useListEmployees()
+  const { data: employees = [], isLoading, isError, refetch } = useListEmployees({ status: "all" })
   const { data: departments = [] } = useListDepartments()
 
   const createMutation = useCreateEmployee()
@@ -248,9 +249,11 @@ export default function EmployeesPage() {
   }
 
   const filteredEmployees = employees.filter((employee) =>
+    (statusFilter === "all" || employee.status === statusFilter) && (
     employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     employee.employeeNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    employee.department.toLowerCase().includes(searchTerm.toLowerCase())
+    employee.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    employee.role.toLowerCase().includes(searchTerm.toLowerCase()))
   ).sort((a, b) => {
     const byName = a.name.localeCompare(b.name, "tr-TR", { sensitivity: "base" })
       || a.employeeNumber.localeCompare(b.employeeNumber, "tr-TR")
@@ -269,7 +272,9 @@ export default function EmployeesPage() {
         <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Personel Yönetimi</h1>
-            <p className="text-muted-foreground mt-1">{employees.length} kayıtlı personel</p>
+            <p className="text-muted-foreground mt-1">
+              {employees.filter(employee => employee.status === "active").length} aktif · {employees.filter(employee => employee.status === "inactive").length} pasif personel
+            </p>
           </div>
 
           {canManageEmployees && <Dialog open={isCreateOpen} onOpenChange={(open) => {
@@ -402,6 +407,24 @@ export default function EmployeesPage() {
         </div>
 
         <div className="flex-1 flex flex-col bg-card rounded-xl border shadow-sm overflow-hidden">
+          <div className="flex flex-wrap gap-2 border-b p-4" role="group" aria-label="Personel durumu">
+            {([
+              ["active", "Aktif personeller"],
+              ["inactive", "Pasif personeller"],
+              ["all", "Tümü"],
+            ] as const).map(([value, label]) => (
+              <Button
+                key={value}
+                size="sm"
+                variant={statusFilter === value ? "default" : "outline"}
+                aria-pressed={statusFilter === value}
+                data-testid={`button-employees-filter-${value}`}
+                onClick={() => setStatusFilter(value)}
+              >
+                {label} ({employees.filter(employee => value === "all" || employee.status === value).length})
+              </Button>
+            ))}
+          </div>
           <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4">
             <div className="relative w-full sm:w-80">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -438,12 +461,16 @@ export default function EmployeesPage() {
               <TableBody>
                 {isLoading ? (
                   <TableRow><TableCell colSpan={5} className="text-center py-8">Yükleniyor...</TableCell></TableRow>
+                ) : isError ? (
+                  <TableRow><TableCell colSpan={5} className="text-center py-8">
+                    Personeller yüklenemedi. <Button variant="outline" size="sm" onClick={() => void refetch()}>Tekrar dene</Button>
+                  </TableCell></TableRow>
                 ) : filteredEmployees.length === 0 ? (
                   <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Kayıt bulunamadı</TableCell></TableRow>
                 ) : (
                   filteredEmployees.map((employee) => (
                     <Fragment key={employee.id}>
-                    <TableRow className={employee.status === "inactive" ? "opacity-50" : ""} data-testid={`row-employee-${employee.id}`}>
+                    <TableRow data-testid={`row-employee-${employee.id}`}>
                       <TableCell className="px-2 sm:px-4 font-mono text-xs font-medium text-muted-foreground">{employee.employeeNumber}</TableCell>
                       <TableCell className="px-2 sm:px-4">
                         <div className="flex items-center gap-3">
@@ -519,32 +546,35 @@ export default function EmployeesPage() {
                         </div>
                         </div>
                         <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t pt-3">
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => setLocation(`/employees/${employee.id}/history`)} title="Çalışma Geçmişi">
-                            <CalendarClock className="h-4 w-4" />
+                          <Button variant="outline" size="sm" className="gap-2" onClick={() => setLocation(`/employees/${employee.id}/history`)}>
+                            <CalendarClock className="h-4 w-4" /> Çalışma geçmişi
                           </Button>
                           {canManageEmployees && <>
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(employee)} title="Personeli düzenle">
-                              <Edit2 className="h-4 w-4" />
+                            <Button variant="outline" size="sm" className="gap-2" onClick={() => setLocation(`/leaves?employeeId=${employee.id}&mode=retrospective`)} data-testid={`button-past-leave-${employee.id}`}>
+                              <CalendarClock className="h-4 w-4" /> Geçmiş izin ekle
+                            </Button>
+                            <Button variant="outline" size="sm" className="gap-2" onClick={() => openEdit(employee)}>
+                              <Edit2 className="h-4 w-4" /> Personeli düzenle
                             </Button>
                             <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                              variant="outline"
+                              size="sm"
+                              className="gap-2"
                               onClick={() => toggleStatus(employee)}
-                              title={employee.status === "active" ? "Pasife Al" : "Aktifleştir"}
+                              disabled={updateMutation.isPending}
+                              data-testid={`button-toggle-status-${employee.id}`}
                             >
-                              <ShieldAlert className="h-4 w-4" />
+                              <ShieldAlert className="h-4 w-4" /> {employee.status === "active" ? "Pasife al" : "Aktif yap"}
                             </Button>
                             <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                              variant="outline"
+                              size="sm"
+                              className="gap-2 text-destructive hover:text-destructive"
                               onClick={() => setDeletingEmployee(employee)}
-                              aria-label={`${employee.name} adlı personeli sil`}
-                              title="Personeli sil"
+                              aria-label={`${employee.name} adlı personeli listeden kaldır`}
                               data-testid={`button-delete-employee-${employee.id}`}
                             >
-                              <Trash2 className="h-4 w-4" />
+                              <Trash2 className="h-4 w-4" /> Listeden kaldır
                             </Button>
                           </>}
                         </div>
